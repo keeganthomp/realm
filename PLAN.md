@@ -405,18 +405,64 @@ Thornwick is a 48x48 tile medieval market town inspired by Varrock.
 
 ---
 
-### Phase 8: Equipment & Crafting
+### Phase 8: Equipment System ✅ (Partial)
 **Goal**: Gear progression
 
-- [ ] Equipment slots and UI
-- [ ] Stat bonuses from gear
+#### 8.1 Equipment Slots & UI ✅
+- [x] 7 equipment slots (head, body, legs, feet, hands, weapon, offhand)
+- [x] Equipment panel UI with character silhouette
+- [x] Right-click inventory item → "Equip" option
+- [x] Click equipped item to unequip
+- [x] Equipment bonuses (attack, strength, defence)
+- [x] Two-handed weapon logic (unequips offhand)
+- [x] Level requirements for equipment
+
+#### 8.2 Equipment Tiers ✅
+- [x] Bronze tier (level 1): sword, shield, helmet, chestplate, legs
+- [x] Iron tier (level 10): sword, shield, helmet, chestplate, legs
+- [x] Steel tier (level 20): sword, 2H sword, shield, helmet, chestplate, legs
+- [x] Basic gear: wooden shield, leather body (no requirements)
+
+#### 8.3 Visual Equipment ✅
+- [x] Equipment meshes visible on player model
+- [x] Equipment meshes visible on remote players
+- [x] Tier-based materials (bronze/iron/steel colors)
+- [x] Attachment points (rightHand, leftHand, head, body)
+
+#### 8.4 Equipment Acquisition ✅
+- [x] Weapons stall sells bronze equipment
+- [x] Goblins drop bronze equipment (rare)
+- [x] Guards drop iron equipment (rare)
+- [x] New players start with bronze sword, wooden shield, leather body
+
+#### 8.5 Combat Integration ✅
+- [x] Equipment bonuses affect combat calculations
+- [x] Attack bonus improves hit chance
+- [x] Strength bonus increases max hit
+- [x] Defence bonus reduces incoming damage
+- [x] Database persistence for equipment
+
+#### 8.6 Mining & Smithing (Planned)
 - [ ] Mining skill (rocks → ore)
 - [ ] Smithing skill (ore → bar → item)
-- [ ] Crafting skill basics
-- [ ] Equipment requirements (level locks)
-- [ ] Add ore rocks, furnace, anvil to starter town via editor
+- [ ] Furnace for smelting
+- [ ] Anvil crafting interface
+- [ ] Add ore rocks outside town
 
-**Deliverable**: Players can craft and equip gear
+**Deliverable**: Players can equip and upgrade gear ✅
+
+---
+
+### Phase 8.5: Combat Polish (Planned)
+**Goal**: Improve combat feedback and balance
+
+- [ ] HP regeneration (1 HP per minute out of combat)
+- [ ] Player hit splats (damage numbers when hit)
+- [ ] Screen flash effect when taking damage
+- [ ] Add Hobgoblin (lvl 28) for steel drops
+- [ ] Add Black Knight (lvl 33) for rare steel armor
+
+**Deliverable**: Polished combat experience
 
 ---
 
@@ -598,9 +644,9 @@ pnpm typecheck        # TypeScript type checking
 
 ## Current Status
 
-**Phases 1-7 Complete** - Full combat system, 3D terrain, town system, and first town (Thornwick) fully decorated and polished.
+**Phases 1-8.4 Complete** - Full combat system, 3D terrain, town system, first town (Thornwick), and equipment system with visual gear on characters.
 
-**Next: Phase 8 (Equipment & Crafting)** - Add equipment slots, mining, smithing, and gear progression.
+**Next: Phase 8.5 (Combat Polish)** - Add HP regen, player damage feedback, then Phase 8.6 (Mining & Smithing).
 
 ### Thornwick Town (Phase 7)
 - 48x48 tile medieval market town with perimeter walls
@@ -613,16 +659,25 @@ pnpm typecheck        # TypeScript type checking
 - Fishing pond with willow tree
 
 ### Combat System (Phase 5)
-- NPCs: Chicken (lvl 1), Cow (lvl 2), Goblin (lvl 5 aggressive)
+- NPCs: Chicken (lvl 1), Cow (lvl 2), Giant Rat (lvl 3), Goblin (lvl 5 aggressive), Guard (lvl 21 passive)
 - Click NPC to walk adjacent and auto-attack
 - OSRS-style damage formulas (accuracy roll vs defence roll)
 - XP: 4 per damage to combat skill + 1.33 HP XP
 - Combat styles: Accurate (Attack), Aggressive (Strength), Defensive (Defence)
 - NPC health bars always visible
-- Hit splats show damage numbers
-- Loot drops on kill (bones, raw meat, feathers, coins)
+- Hit splats show damage numbers on NPCs
+- Loot drops on kill (bones, raw meat, feathers, coins, equipment)
 - Right-click food to eat and heal
 - Respawn: NPCs after timer, players at spawn point
+
+### Equipment System (Phase 8)
+- 7 slots: head, body, legs, feet, hands, weapon, offhand
+- Bronze/Iron/Steel tiers with level requirements
+- Equipment bonuses affect combat (attack, strength, defence)
+- Visual equipment meshes on player models
+- Equipment synced to remote players
+- Goblins drop bronze gear, Guards drop iron gear
+- Weapons stall sells bronze equipment
 
 ### 3D Terrain (Phase 5.5)
 - Babylon.js perspective camera (OSRS-style angle)
@@ -653,21 +708,27 @@ pnpm typecheck        # TypeScript type checking
 
 ## Next Steps
 
-1. **Expand Thornwick** (Content)
+1. **Phase 8.5: Combat Polish** (Priority)
+   - Add HP regeneration (1 HP per minute out of combat)
+   - Add player hit splats when taking damage
+   - Add screen flash effect on damage
+   - Add Hobgoblin NPC (lvl 28) for steel drops
+   - Add Black Knight NPC (lvl 33) for rare steel armor
+
+2. **Phase 8.6: Mining & Smithing**
+   - Mining skill (rocks → ore)
+   - Smithing skill (ore → bar → item at anvil)
+   - Add ore rocks outside town walls
+   - Implement furnace for smelting
+   - Create goblin camp with hobgoblins
+
+3. **Expand Thornwick** (Content)
    - Add tutorial NPC with dialogue
-   - Implement functional shops (buy/sell)
    - Add mining rocks outside town walls
    - Create cow field and goblin camp outside walls
    - Add ambient townsfolk NPCs
 
-2. **Phase 8: Equipment & Crafting**
-   - Equipment slots UI (helm, body, legs, weapon, shield)
-   - Stat bonuses from gear
-   - Mining skill (rocks → ore)
-   - Smithing skill (ore → bar → item at anvil)
-   - Bronze/Iron tier gear
-
-3. **Phase 9: Second Town**
+4. **Phase 9: Second Town**
    - Design and implement a second town
    - Zone transitions between areas
    - Different biome/theme (coastal port or mountain village)

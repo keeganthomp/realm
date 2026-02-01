@@ -82,8 +82,16 @@ export const NPC_DEFINITIONS: Record<NpcType, NpcDefinition> = {
     aggroRange: 3,
     respawnTime: 45000,
     drops: [
-      { item: ItemType.COINS, minQuantity: 1, maxQuantity: 5, weight: 80 },
-      { item: ItemType.BONES, minQuantity: 1, maxQuantity: 1, weight: 100 }
+      // Always drops
+      { item: ItemType.BONES, minQuantity: 1, maxQuantity: 1, weight: 100 },
+      // Common drops
+      { item: ItemType.COINS, minQuantity: 1, maxQuantity: 15, weight: 75 },
+      // Bronze equipment (rare - goblins hoard scraps)
+      { item: ItemType.BRONZE_SWORD, minQuantity: 1, maxQuantity: 1, weight: 4 },
+      { item: ItemType.BRONZE_HELMET, minQuantity: 1, maxQuantity: 1, weight: 4 },
+      { item: ItemType.BRONZE_SHIELD, minQuantity: 1, maxQuantity: 1, weight: 3 },
+      { item: ItemType.BRONZE_LEGS, minQuantity: 1, maxQuantity: 1, weight: 2 },
+      { item: ItemType.BRONZE_CHESTPLATE, minQuantity: 1, maxQuantity: 1, weight: 1 }
     ]
   },
   [NpcType.GIANT_RAT]: {
@@ -99,7 +107,8 @@ export const NPC_DEFINITIONS: Record<NpcType, NpcDefinition> = {
     aggroRange: 0,
     respawnTime: 40000,
     drops: [
-      { item: ItemType.BONES, minQuantity: 1, maxQuantity: 1, weight: 100 }
+      { item: ItemType.BONES, minQuantity: 1, maxQuantity: 1, weight: 100 },
+      { item: ItemType.COINS, minQuantity: 1, maxQuantity: 5, weight: 40 }
     ]
   },
   [NpcType.GUARD]: {
@@ -115,7 +124,16 @@ export const NPC_DEFINITIONS: Record<NpcType, NpcDefinition> = {
     aggroRange: 0, // Passive - town guards don't attack players
     respawnTime: 60000,
     drops: [
-      { item: ItemType.BONES, minQuantity: 1, maxQuantity: 1, weight: 100 }
+      // Always drops
+      { item: ItemType.BONES, minQuantity: 1, maxQuantity: 1, weight: 100 },
+      // Common drops
+      { item: ItemType.COINS, minQuantity: 15, maxQuantity: 60, weight: 70 },
+      // Iron equipment (rare - guards are well equipped)
+      { item: ItemType.IRON_SWORD, minQuantity: 1, maxQuantity: 1, weight: 3 },
+      { item: ItemType.IRON_HELMET, minQuantity: 1, maxQuantity: 1, weight: 3 },
+      { item: ItemType.IRON_SHIELD, minQuantity: 1, maxQuantity: 1, weight: 2 },
+      { item: ItemType.IRON_LEGS, minQuantity: 1, maxQuantity: 1, weight: 2 },
+      { item: ItemType.IRON_CHESTPLATE, minQuantity: 1, maxQuantity: 1, weight: 1 }
     ]
   }
 }

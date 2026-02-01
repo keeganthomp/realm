@@ -619,17 +619,17 @@ const worldObjects: WorldObjectPlacement[] = [
   },
 
   // ============ THORNWICK KEEP ============
-  // Torches at keep entrance
+  // Torches at keep entrance (offset from guard positions)
   {
     id: 'torch_keep_1',
     objectType: WorldObjectType.TORCH_STAND,
-    x: 22,
+    x: 20,
     y: 14
   },
   {
     id: 'torch_keep_2',
     objectType: WorldObjectType.TORCH_STAND,
-    x: 26,
+    x: 28,
     y: 14
   },
 

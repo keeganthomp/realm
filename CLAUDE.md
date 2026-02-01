@@ -7,9 +7,10 @@ This file provides guidance to Claude Code when working with this repository. Re
 **Realm** is a 2D browser MMO inspired by RuneScape (OSRS), built with TypeScript. Players spawn in **Thornwick**, a medieval market town, and can explore, train skills, fight NPCs, and interact with other players in real-time.
 
 ### Current State
-- **Phases 1-7 complete**: Movement, multiplayer, skills, inventory, banking, combat, 3D terrain, town system
+- **Phases 1-8 complete**: Movement, multiplayer, skills, inventory, banking, combat, 3D terrain, town system, equipment
+- **Equipment system**: 7 slots, bronze/iron/steel tiers, visual gear on characters, NPC drops
 - **First town**: Thornwick (48x48 tiles) - fully decorated with marketplace, fountain, stalls, torches, props
-- **Next up**: Equipment slots, mining/smithing, more towns
+- **Next up**: HP regen, damage feedback, mining/smithing, more towns
 
 ## Tech Stack
 

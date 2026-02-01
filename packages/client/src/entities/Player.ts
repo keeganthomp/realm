@@ -3,14 +3,16 @@ import {
   TransformNode,
   MeshBuilder,
   Mesh,
-  AnimationGroup
+  AnimationGroup,
+  Vector3
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
 import { TextBlock } from '@babylonjs/gui'
-import { Direction, getDirection, TILE_SIZE } from '@realm/shared'
+import { Direction, getDirection, TILE_SIZE, EquipmentSlot, ItemType } from '@realm/shared'
 import type { Position } from '@realm/shared'
 import { SharedResources } from '../systems/SharedResources'
 import { AssetManager } from '../systems/AssetManager'
+import { createEquipmentMesh, getEquipmentAttachPoint, AttachPoint } from './EquipmentMeshes'
 
 const MOVE_SPEED = 3 // pixels per frame at 60fps
 const MODEL_PATH = '/assets/models/'
@@ -45,6 +47,10 @@ export class Player {
   private heightProvider: ((tileX: number, tileY: number) => number) | null = null
 
   private nameLabel: TextBlock | null = null
+
+  // Equipment attachment points
+  private attachPoints: Record<AttachPoint, TransformNode> | null = null
+  private equipmentMeshes: Map<EquipmentSlot, Mesh> = new Map()
 
   constructor(startPosition: Position, scene: Scene) {
     this.position = { ...startPosition }
@@ -117,6 +123,9 @@ export class Player {
       // Scale the model appropriately (adjust as needed for your model)
       this.node.scaling.setAll(1.0)
 
+      // Create equipment attachment points
+      this.createAttachPoints()
+
       this.modelLoaded = true
       console.log(
         `Player model loaded. Animations found: ${result.animationGroups.map((a) => a.name).join(', ')}`
@@ -161,7 +170,71 @@ export class Player {
     head.parent = this.node
 
     this.node.scaling.setAll(1.5)
+
+    // Create equipment attachment points for fallback mesh
+    this.createAttachPoints()
+
     this.modelLoaded = true
+  }
+
+  /**
+   * Create attachment points for equipment meshes
+   */
+  private createAttachPoints() {
+    this.attachPoints = {
+      rightHand: new TransformNode('attach_rightHand', this.scene),
+      leftHand: new TransformNode('attach_leftHand', this.scene),
+      head: new TransformNode('attach_head', this.scene),
+      body: new TransformNode('attach_body', this.scene)
+    }
+
+    // Position attachment points relative to character
+    // These values work for both GLB model and fallback mesh
+    this.attachPoints.rightHand.position = new Vector3(0.25, 0.5, 0)
+    this.attachPoints.leftHand.position = new Vector3(-0.25, 0.5, 0)
+    this.attachPoints.head.position = new Vector3(0, 1.1, 0)
+    this.attachPoints.body.position = new Vector3(0, 0.55, 0)
+
+    // Parent all attach points to the main node
+    for (const point of Object.values(this.attachPoints)) {
+      point.parent = this.node
+    }
+  }
+
+  /**
+   * Update equipment visuals when equipment changes
+   */
+  updateEquipment(slot: EquipmentSlot, itemType: ItemType | null) {
+    if (!this.attachPoints) return
+
+    // Remove existing mesh for this slot
+    const existingMesh = this.equipmentMeshes.get(slot)
+    if (existingMesh) {
+      existingMesh.dispose()
+      this.equipmentMeshes.delete(slot)
+    }
+
+    // Create new mesh if item equipped
+    if (itemType) {
+      const mesh = createEquipmentMesh(this.scene, itemType)
+      if (mesh) {
+        const attachPoint = getEquipmentAttachPoint(itemType)
+        if (attachPoint && this.attachPoints[attachPoint]) {
+          mesh.parent = this.attachPoints[attachPoint]
+          this.equipmentMeshes.set(slot, mesh)
+        }
+      }
+    }
+  }
+
+  /**
+   * Update all equipment visuals at once
+   */
+  updateAllEquipment(equipment: Record<string, string | null>) {
+    for (const slotKey of Object.values(EquipmentSlot)) {
+      const itemType = equipment[slotKey] as ItemType | null
+      this.updateEquipment(slotKey, itemType)
+    }
   }
 
   private createNameLabel() {
@@ -338,6 +411,12 @@ export class Player {
   }
 
   dispose() {
+    // Dispose equipment meshes
+    for (const mesh of this.equipmentMeshes.values()) {
+      mesh.dispose()
+    }
+    this.equipmentMeshes.clear()
+
     this.node.dispose()
     SharedResources.get().removeControl(this.nameLabel)
   }

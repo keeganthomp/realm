@@ -23,7 +23,7 @@ import { Camera } from './systems/Camera'
 import { Pathfinding } from './systems/Pathfinding'
 import { SharedResources } from './systems/SharedResources'
 import { AssetManager } from './systems/AssetManager'
-import { worldToTile, tileToWorld, WorldObjectType, NpcType, TILE_SIZE } from '@realm/shared'
+import { worldToTile, tileToWorld, WorldObjectType, NpcType, TILE_SIZE, EquipmentSlot, ItemType } from '@realm/shared'
 import type { Position, Direction, ChunkData } from '@realm/shared'
 
 export class Game {
@@ -614,6 +614,25 @@ export class Game {
     const remotePlayer = this.remotePlayers.get(id)
     if (remotePlayer) {
       remotePlayer.setTargetPosition(position, direction)
+    }
+  }
+
+  // Equipment visuals
+  updateLocalPlayerEquipment(equipment: Record<string, string | null>) {
+    this.player.updateAllEquipment(equipment)
+  }
+
+  updateRemotePlayerEquipment(id: string, slot: EquipmentSlot, itemType: ItemType | null) {
+    const remotePlayer = this.remotePlayers.get(id)
+    if (remotePlayer) {
+      remotePlayer.updateEquipment(slot, itemType)
+    }
+  }
+
+  updateRemotePlayerAllEquipment(id: string, equipment: Record<string, string | null>) {
+    const remotePlayer = this.remotePlayers.get(id)
+    if (remotePlayer) {
+      remotePlayer.updateAllEquipment(equipment)
     }
   }
 

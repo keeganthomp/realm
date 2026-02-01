@@ -121,7 +121,7 @@ Add a 7-slot equipment system (head, body, legs, feet, hands, weapon, offhand) w
 
 ---
 
-## Phase 5: Visual Equipment on Character 🔜 PLANNED
+## Phase 5: Visual Equipment on Character ✅ COMPLETE
 
 ### Overview
 Display equipped items visually on the player's 3D character model in-game. When a player equips a sword, shield, or armor, other players should see it.
@@ -262,13 +262,13 @@ updateEquipment(slot: EquipmentSlot, itemType: ItemType | null) {
 - [x] New players start with bronze sword, wooden shield, leather body
 - [x] Weapons stall sells equipment
 
-### Phase 5 (Planned)
-- [ ] Equipped weapons visible on player model
-- [ ] Equipped shields visible on player model
-- [ ] Equipped armor changes player appearance
-- [ ] Remote players show correct equipment
-- [ ] Equipment animates with player
-- [ ] Performance acceptable with 50+ equipped players
+### Phase 5 (Complete)
+- [x] Equipped weapons visible on player model
+- [x] Equipped shields visible on player model
+- [x] Equipped armor changes player appearance
+- [x] Remote players show correct equipment
+- [x] Equipment animates with player (parented to player node)
+- [ ] Performance acceptable with 50+ equipped players (not yet tested at scale)
 
 ---
 

@@ -319,6 +319,27 @@ export class SharedResources {
     return this.getMaterial('bone', new Color3(0.9, 0.88, 0.82))
   }
 
+  // Equipment materials - by tier
+  get bronzeEquipmentMaterial(): StandardMaterial {
+    return this.getMaterial('bronzeEquip', new Color3(0.8, 0.5, 0.2))
+  }
+
+  get ironEquipmentMaterial(): StandardMaterial {
+    return this.getMaterial('ironEquip', new Color3(0.55, 0.55, 0.6))
+  }
+
+  get steelEquipmentMaterial(): StandardMaterial {
+    return this.getMaterial('steelEquip', new Color3(0.7, 0.75, 0.85))
+  }
+
+  get woodenEquipmentMaterial(): StandardMaterial {
+    return this.getMaterial('woodenEquip', new Color3(0.6, 0.45, 0.25))
+  }
+
+  get leatherEquipmentMaterial(): StandardMaterial {
+    return this.getMaterial('leatherEquip', new Color3(0.5, 0.35, 0.2))
+  }
+
   // Mushroom materials
   get mushroomRedMaterial(): StandardMaterial {
     return this.getMaterial('mushroomRed', new Color3(0.85, 0.15, 0.1))

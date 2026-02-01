@@ -98,15 +98,25 @@ pnpm typecheck        # TypeScript type checking
 - 23 skill definitions (OSRS-style XP curve)
 - Full combat system (Attack, Strength, Defence, Hitpoints)
 - NPCs with combat AI, loot drops, respawning (passive and aggressive types)
+- **Equipment system** with 7 slots (head, body, legs, feet, hands, weapon, offhand)
+- **Visual equipment** on player models (weapons, shields, armor visible in 3D)
+- **Equipment drops** from NPCs (goblins drop bronze, guards drop iron)
 - Skill panel UI with level/XP display
-- Inventory panel (28 slots)
+- Inventory panel (28 slots) with equip option
+- Equipment panel with stat bonuses
 - Bank system
+- Shop system (weapons stall sells equipment)
 - Chat system
 - Player nameplates
 - World objects (trees, fishing spots, fire, bank booths, decorative props)
-- Database persistence (skills, inventory)
+- Database persistence (skills, inventory, equipment)
 - Loading screen
 - Auto-save every 30 seconds
+
+### Equipment Tiers
+- **Bronze** (Level 1) - Starter gear, dropped by goblins
+- **Iron** (Level 10) - Mid-tier, dropped by guards
+- **Steel** (Level 20) - Advanced gear
 
 ### Towns
 - **Thornwick** - First town, inspired by Varrock (48x48 tiles)
@@ -114,14 +124,15 @@ pnpm typecheck        # TypeScript type checking
   - Bank, General Store, Blacksmith, Inn
   - Central marketplace with fountain and 4 colored market stalls
   - Perimeter walls with south gate
-  - Guard NPCs (passive), chickens, rats
+  - Guard NPCs (passive, drop iron), chickens, rats
+  - Goblins (aggressive, drop bronze)
   - Torches, barrels, crates, benches, tables, flower patches
   - Trees, fishing pond with willow, bank booth
   - Cooking fire in inn, anvil at blacksmith
 
 ### Coming Soon
-- Equipment slots and gear
-- More skills (Mining, Smithing)
+- HP regeneration and damage feedback
+- Mining and Smithing skills
 - Additional towns and zones
 - Quest system
 

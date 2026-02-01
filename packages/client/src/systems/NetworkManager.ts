@@ -1,7 +1,7 @@
 import { Client, Room } from '@colyseus/sdk'
 import type { Game } from '../Game'
 import type { Position } from '@realm/shared'
-import { Direction, NpcType } from '@realm/shared'
+import { Direction, NpcType, EquipmentSlot } from '@realm/shared'
 
 const DEFAULT_SERVER_URL = import.meta.env.DEV ? 'http://localhost:2567' : window.location.origin
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? DEFAULT_SERVER_URL
@@ -182,6 +182,10 @@ export class NetworkManager {
           y: player.y
         })
 
+        // Sync initial equipment visuals for remote player
+        const initialEquipment = this.extractEquipmentFromPlayer(player)
+        this.game.updateRemotePlayerAllEquipment(sessionId, initialEquipment)
+
         player.onChange(() => {
           if (sessionId !== this.sessionId) {
             this.game.updateRemotePlayer(
@@ -189,6 +193,9 @@ export class NetworkManager {
               { x: player.x, y: player.y },
               player.direction as Direction
             )
+            // Sync equipment visuals when any property changes
+            const equipment = this.extractEquipmentFromPlayer(player)
+            this.game.updateRemotePlayerAllEquipment(sessionId, equipment)
           }
         })
       }
@@ -315,6 +322,8 @@ export class NetworkManager {
         bonuses: { attackBonus: number; strengthBonus: number; defenceBonus: number }
       }) => {
         this.onEquipmentChanged?.(data.equipment, data.bonuses)
+        // Update local player's visual equipment
+        this.game.updateLocalPlayerEquipment(data.equipment)
       }
     )
 
@@ -536,6 +545,18 @@ export class NetworkManager {
       items.push({ itemType: item.itemType, quantity: item.quantity })
     }
     this.onInventoryChanged?.(items)
+  }
+
+  private extractEquipmentFromPlayer(player: any): Record<string, string | null> {
+    return {
+      [EquipmentSlot.HEAD]: player.equipHead?.itemType || null,
+      [EquipmentSlot.BODY]: player.equipBody?.itemType || null,
+      [EquipmentSlot.LEGS]: player.equipLegs?.itemType || null,
+      [EquipmentSlot.FEET]: player.equipFeet?.itemType || null,
+      [EquipmentSlot.HANDS]: player.equipHands?.itemType || null,
+      [EquipmentSlot.WEAPON]: player.equipWeapon?.itemType || null,
+      [EquipmentSlot.OFFHAND]: player.equipOffhand?.itemType || null
+    }
   }
 
   private updatePlayerList() {
