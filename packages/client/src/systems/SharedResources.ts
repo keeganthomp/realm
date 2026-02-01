@@ -283,6 +283,51 @@ export class SharedResources {
     return this.getMaterial('rock', new Color3(0.55, 0.52, 0.48))
   }
 
+  // Ore vein materials
+  get copperVeinMaterial(): StandardMaterial {
+    return this.getMaterial('copperVein', new Color3(0.72, 0.45, 0.2))
+  }
+
+  get tinVeinMaterial(): StandardMaterial {
+    return this.getMaterial('tinVein', new Color3(0.75, 0.75, 0.78))
+  }
+
+  get ironVeinMaterial(): StandardMaterial {
+    return this.getMaterial('ironVein', new Color3(0.55, 0.35, 0.25))
+  }
+
+  get coalVeinMaterial(): StandardMaterial {
+    return this.getMaterial('coalVein', new Color3(0.15, 0.15, 0.18))
+  }
+
+  // Fabric/leather materials
+  get fabricMaterial(): StandardMaterial {
+    return this.getMaterial('fabric', new Color3(0.85, 0.8, 0.7))
+  }
+
+  get leatherMaterial(): StandardMaterial {
+    return this.getMaterial('leather', new Color3(0.55, 0.4, 0.25))
+  }
+
+  // Ruins materials
+  get oldStoneMaterial(): StandardMaterial {
+    return this.getMaterial('oldStone', new Color3(0.45, 0.43, 0.4))
+  }
+
+  // Bone material
+  get boneMaterial(): StandardMaterial {
+    return this.getMaterial('bone', new Color3(0.9, 0.88, 0.82))
+  }
+
+  // Mushroom materials
+  get mushroomRedMaterial(): StandardMaterial {
+    return this.getMaterial('mushroomRed', new Color3(0.85, 0.15, 0.1))
+  }
+
+  get mushroomBrownMaterial(): StandardMaterial {
+    return this.getMaterial('mushroomBrown', new Color3(0.55, 0.4, 0.25))
+  }
+
   // ============ Cleanup ============
 
   dispose() {

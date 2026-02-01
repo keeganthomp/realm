@@ -296,12 +296,12 @@ const worldObjects: WorldObjectPlacement[] = [
   },
 
   // ============ COOKING ============
-  // Cooking fire inside the inn
+  // Cooking range inside the inn (functional cooking station)
   {
-    id: 'inn_fire',
-    objectType: WorldObjectType.FIRE,
-    x: 38,
-    y: 34
+    id: 'inn_cooking_range',
+    objectType: WorldObjectType.COOKING_RANGE,
+    x: 36,
+    y: 32
   },
 
   // ============ MARKETPLACE ============
@@ -313,28 +313,28 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 26
   },
 
-  // Market stalls around the edges
+  // Market stalls - functional shops!
   {
-    id: 'stall_north_1',
-    objectType: WorldObjectType.MARKET_STALL_RED,
+    id: 'stall_food',
+    objectType: WorldObjectType.MARKET_STALL_FOOD,
     x: 20,
     y: 23
   },
   {
-    id: 'stall_north_2',
-    objectType: WorldObjectType.MARKET_STALL_BLUE,
+    id: 'stall_weapons',
+    objectType: WorldObjectType.MARKET_STALL_WEAPONS,
     x: 26,
     y: 23
   },
   {
-    id: 'stall_south_1',
-    objectType: WorldObjectType.MARKET_STALL_GREEN,
+    id: 'stall_general',
+    objectType: WorldObjectType.MARKET_STALL_GENERAL,
     x: 20,
     y: 30
   },
   {
-    id: 'stall_south_2',
-    objectType: WorldObjectType.MARKET_STALL_YELLOW,
+    id: 'stall_fish',
+    objectType: WorldObjectType.MARKET_STALL_FISH,
     x: 26,
     y: 30
   },
@@ -365,8 +365,44 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 31
   },
 
-  // ============ BLACKSMITH ============
-  // Anvil outside the blacksmith
+  // ============ BLACKSMITH INTERIOR ============
+  // Anvil inside the blacksmith
+  {
+    id: 'anvil_blacksmith_interior',
+    objectType: WorldObjectType.ANVIL,
+    x: 7,
+    y: 32
+  },
+  // Fireplace/forge
+  {
+    id: 'blacksmith_fireplace',
+    objectType: WorldObjectType.FIREPLACE,
+    x: 5,
+    y: 31
+  },
+  // Work table
+  {
+    id: 'blacksmith_table',
+    objectType: WorldObjectType.TABLE,
+    x: 9,
+    y: 33
+  },
+  // Storage barrels inside
+  {
+    id: 'barrel_blacksmith_interior',
+    objectType: WorldObjectType.BARREL,
+    x: 5,
+    y: 35
+  },
+  // Crate inside
+  {
+    id: 'crate_blacksmith_interior',
+    objectType: WorldObjectType.CRATE,
+    x: 6,
+    y: 35
+  },
+  // Outside blacksmith area
+  // Anvil outside the blacksmith (for outdoor work)
   {
     id: 'anvil_blacksmith',
     objectType: WorldObjectType.ANVIL,
@@ -388,7 +424,79 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 33
   },
 
-  // ============ THE RUSTY SWORD INN ============
+  // ============ THE RUSTY SWORD INN INTERIOR ============
+  // Bar counter along east wall
+  {
+    id: 'inn_bar_1',
+    objectType: WorldObjectType.BAR_COUNTER,
+    x: 42,
+    y: 32
+  },
+  {
+    id: 'inn_bar_2',
+    objectType: WorldObjectType.BAR_COUNTER,
+    x: 42,
+    y: 34
+  },
+  // Stools at bar
+  {
+    id: 'inn_stool_1',
+    objectType: WorldObjectType.STOOL,
+    x: 41,
+    y: 32
+  },
+  {
+    id: 'inn_stool_2',
+    objectType: WorldObjectType.STOOL,
+    x: 41,
+    y: 34
+  },
+  // Fireplace in corner (interior fire already exists at 38,34)
+  {
+    id: 'inn_fireplace',
+    objectType: WorldObjectType.FIREPLACE,
+    x: 36,
+    y: 31
+  },
+  // Tables and chairs
+  {
+    id: 'inn_table_1',
+    objectType: WorldObjectType.TABLE,
+    x: 37,
+    y: 34
+  },
+  {
+    id: 'inn_chair_1',
+    objectType: WorldObjectType.CHAIR,
+    x: 36,
+    y: 34
+  },
+  {
+    id: 'inn_chair_2',
+    objectType: WorldObjectType.CHAIR,
+    x: 38,
+    y: 35
+  },
+  {
+    id: 'inn_table_2',
+    objectType: WorldObjectType.TABLE,
+    x: 40,
+    y: 36
+  },
+  {
+    id: 'inn_chair_3',
+    objectType: WorldObjectType.CHAIR,
+    x: 39,
+    y: 36
+  },
+  // Barrels (storage)
+  {
+    id: 'inn_barrel_1',
+    objectType: WorldObjectType.BARREL,
+    x: 43,
+    y: 36
+  },
+  // Outside seating area
   // Bench outside inn
   {
     id: 'bench_inn',
@@ -417,7 +525,28 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 33
   },
 
-  // ============ BANK ============
+  // ============ BANK INTERIOR ============
+  // Bank booth already exists, add interior furniture
+  // Counter along the back wall
+  {
+    id: 'bank_counter_1',
+    objectType: WorldObjectType.COUNTER,
+    x: 40,
+    y: 19
+  },
+  {
+    id: 'bank_counter_2',
+    objectType: WorldObjectType.COUNTER,
+    x: 42,
+    y: 19
+  },
+  // Chest behind counter (decorative)
+  {
+    id: 'bank_chest_1',
+    objectType: WorldObjectType.CHEST,
+    x: 41,
+    y: 19
+  },
   // Torches at bank entrance
   {
     id: 'torch_bank_1',
@@ -432,7 +561,41 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 22
   },
 
-  // ============ GENERAL STORE ============
+  // ============ GENERAL STORE INTERIOR ============
+  // Counter in the store
+  {
+    id: 'store_counter_1',
+    objectType: WorldObjectType.COUNTER,
+    x: 6,
+    y: 19
+  },
+  {
+    id: 'store_counter_2',
+    objectType: WorldObjectType.COUNTER,
+    x: 8,
+    y: 19
+  },
+  // Bookshelf/display shelf against wall
+  {
+    id: 'store_shelf_1',
+    objectType: WorldObjectType.BOOKSHELF,
+    x: 5,
+    y: 19
+  },
+  // Crates and barrels (storage)
+  {
+    id: 'crate_store_interior',
+    objectType: WorldObjectType.CRATE,
+    x: 5,
+    y: 22
+  },
+  {
+    id: 'barrel_store_interior',
+    objectType: WorldObjectType.BARREL,
+    x: 6,
+    y: 22
+  },
+  // Outside store area
   // Crate at general store
   {
     id: 'crate_store_1',

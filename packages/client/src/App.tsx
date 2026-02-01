@@ -7,11 +7,14 @@ import { ConnectionStatus } from './ui/ConnectionStatus'
 import { SkillsPanel } from './ui/SkillsPanel'
 import { InventoryPanel } from './ui/InventoryPanel'
 import { BankPanel } from './ui/BankPanel'
+import { DialogPanel } from './ui/DialogPanel'
+import { ShopPanel } from './ui/ShopPanel'
 import { ActionProgress } from './ui/ActionProgress'
 import { Notifications, useNotifications } from './ui/Notifications'
 import { LoadingScreen } from './ui/LoadingScreen'
 import { HealthBar } from './ui/HealthBar'
 import { Sidebar, PanelType } from './ui/Sidebar'
+import { ItemType } from '@realm/shared'
 
 export function App() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -40,6 +43,16 @@ export function App() {
   const [currentHp, setCurrentHp] = useState(10)
   const [maxHp, setMaxHp] = useState(10)
   const [inCombat, setInCombat] = useState(false)
+
+  // Dialog state
+  const [dialog, setDialog] = useState<{ title: string; text: string } | null>(null)
+
+  // Shop state
+  const [shop, setShop] = useState<{
+    shopId: string
+    name: string
+    items: Array<{ itemType: ItemType; price: number; stock: number }>
+  } | null>(null)
 
   // Sidebar panel state - null means no panel open
   const [activePanel, setActivePanel] = useState<PanelType>(null)
@@ -183,7 +196,6 @@ export function App() {
 
       // Item dropped feedback
       network.onItemDropped = (itemType, _quantity) => {
-        showXpGainRef.current('', 0) // Clear any existing notification
         setMessages((prev) => [
           ...prev.slice(-50),
           { sender: 'System', text: `Dropped ${itemType}` }
@@ -221,6 +233,38 @@ export function App() {
           ...prev.slice(-50),
           { sender: 'System', text: `You are under attack!` }
         ])
+      }
+
+      // Examine/dialog callbacks
+      network.onExamineResult = (name, text, isReadable) => {
+        setDialog({ title: name, text })
+      }
+
+      // Shop callbacks
+      network.onShopOpened = (shopId, name, items) => {
+        setShop({
+          shopId,
+          name,
+          items: items.map(i => ({ ...i, itemType: i.itemType as ItemType }))
+        })
+      }
+
+      network.onShopBuySuccess = (itemType, quantity, totalCost) => {
+        setMessages((prev) => [
+          ...prev.slice(-50),
+          { sender: 'System', text: `Bought ${quantity}x ${itemType} for ${totalCost} coins` }
+        ])
+      }
+
+      network.onShopSellSuccess = (itemType, quantity, goldReceived) => {
+        setMessages((prev) => [
+          ...prev.slice(-50),
+          { sender: 'System', text: `Sold ${quantity}x ${itemType} for ${goldReceived} coins` }
+        ])
+      }
+
+      network.onShopError = (message) => {
+        showErrorRef.current(message)
       }
 
       // Connect to server
@@ -265,6 +309,34 @@ export function App() {
   const handleEatFood = useCallback((index: number) => {
     networkRef.current?.eatFood(index)
   }, [])
+
+  const handleCloseDialog = useCallback(() => {
+    setDialog(null)
+  }, [])
+
+  const handleCloseShop = useCallback(() => {
+    setShop(null)
+  }, [])
+
+  const handleShopBuy = useCallback((itemType: ItemType, quantity: number) => {
+    if (shop) {
+      networkRef.current?.shopBuy(shop.shopId, itemType, quantity)
+    }
+  }, [shop])
+
+  const handleShopSell = useCallback((itemIndex: number, quantity: number) => {
+    if (shop) {
+      networkRef.current?.shopSell(shop.shopId, itemIndex, quantity)
+    }
+  }, [shop])
+
+  // Calculate player coins for shop
+  const playerCoins = inventory.reduce((total, item) => {
+    if (item.itemType === ItemType.COINS) {
+      return total + item.quantity
+    }
+    return total
+  }, 0)
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -345,6 +417,33 @@ export function App() {
                 onDeposit={handleBankDeposit}
                 onWithdraw={handleBankWithdraw}
                 onClose={handleCloseBank}
+              />
+            </div>
+          )}
+
+          {/* Dialog Panel */}
+          {dialog && (
+            <div style={{ pointerEvents: 'auto' }}>
+              <DialogPanel
+                title={dialog.title}
+                text={dialog.text}
+                onClose={handleCloseDialog}
+              />
+            </div>
+          )}
+
+          {/* Shop Panel */}
+          {shop && (
+            <div style={{ pointerEvents: 'auto' }}>
+              <ShopPanel
+                shopId={shop.shopId}
+                name={shop.name}
+                items={shop.items}
+                inventory={inventory}
+                playerCoins={playerCoins}
+                onBuy={handleShopBuy}
+                onSell={handleShopSell}
+                onClose={handleCloseShop}
               />
             </div>
           )}

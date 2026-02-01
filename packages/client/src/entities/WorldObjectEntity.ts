@@ -77,10 +77,10 @@ export class WorldObjectEntity {
       case WorldObjectType.COOKING_RANGE:
         this.createCookingRange()
         break
-      case WorldObjectType.MARKET_STALL_RED:
-      case WorldObjectType.MARKET_STALL_BLUE:
-      case WorldObjectType.MARKET_STALL_GREEN:
-      case WorldObjectType.MARKET_STALL_YELLOW:
+      case WorldObjectType.MARKET_STALL_FOOD:
+      case WorldObjectType.MARKET_STALL_WEAPONS:
+      case WorldObjectType.MARKET_STALL_GENERAL:
+      case WorldObjectType.MARKET_STALL_FISH:
         this.createMarketStall()
         break
       case WorldObjectType.FOUNTAIN:
@@ -121,6 +121,82 @@ export class WorldObjectEntity {
         break
       case WorldObjectType.ROCK:
         this.createRock()
+        break
+      // Mining ores
+      case WorldObjectType.COPPER_ORE:
+      case WorldObjectType.TIN_ORE:
+      case WorldObjectType.IRON_ORE:
+      case WorldObjectType.COAL_ORE:
+        this.createOreRock()
+        break
+      // Interior furniture
+      case WorldObjectType.COUNTER:
+      case WorldObjectType.BAR_COUNTER:
+        this.createCounter()
+        break
+      case WorldObjectType.BOOKSHELF:
+        this.createBookshelf()
+        break
+      case WorldObjectType.BED:
+        this.createBed()
+        break
+      case WorldObjectType.CHAIR:
+        this.createChair()
+        break
+      case WorldObjectType.STOOL:
+        this.createStool()
+        break
+      case WorldObjectType.FIREPLACE:
+        this.createFireplace()
+        break
+      case WorldObjectType.CHEST:
+        this.createChest()
+        break
+      case WorldObjectType.LADDER:
+        this.createLadder()
+        break
+      // Wilderness structures
+      case WorldObjectType.GOBLIN_TENT:
+        this.createGoblinTent()
+        break
+      case WorldObjectType.PALISADE_WALL:
+        this.createPalisadeWall()
+        break
+      case WorldObjectType.CAMPFIRE_LARGE:
+        this.createLargeCampfire()
+        break
+      case WorldObjectType.BONES_PILE:
+        this.createBonesPile()
+        break
+      // Ruins
+      case WorldObjectType.RUINED_WALL:
+        this.createRuinedWall()
+        break
+      case WorldObjectType.RUINED_COLUMN:
+        this.createRuinedColumn()
+        break
+      case WorldObjectType.STONE_RUBBLE:
+        this.createStoneRubble()
+        break
+      case WorldObjectType.ANCIENT_ALTAR:
+        this.createAncientAltar()
+        break
+      // Nature
+      case WorldObjectType.FALLEN_LOG:
+        this.createFallenLog()
+        break
+      case WorldObjectType.MUSHROOM_PATCH:
+        this.createMushroomPatch()
+        break
+      case WorldObjectType.OLD_STUMP:
+        this.createOldStump()
+        break
+      // Mine props
+      case WorldObjectType.MINE_CART:
+        this.createMineCart()
+        break
+      case WorldObjectType.MINE_ENTRANCE:
+        this.createMineEntrance()
         break
     }
   }
@@ -366,13 +442,13 @@ export class WorldObjectEntity {
     rightPost.parent = this.node
     this.meshes.push(rightPost)
 
-    // Awning - color based on type
+    // Awning - color based on shop type
     let awningMat = res.redAwningMaterial
-    if (this.objectType === WorldObjectType.MARKET_STALL_BLUE) {
+    if (this.objectType === WorldObjectType.MARKET_STALL_WEAPONS) {
       awningMat = res.blueAwningMaterial
-    } else if (this.objectType === WorldObjectType.MARKET_STALL_GREEN) {
+    } else if (this.objectType === WorldObjectType.MARKET_STALL_GENERAL) {
       awningMat = res.greenAwningMaterial
-    } else if (this.objectType === WorldObjectType.MARKET_STALL_YELLOW) {
+    } else if (this.objectType === WorldObjectType.MARKET_STALL_FISH) {
       awningMat = res.yellowAwningMaterial
     }
 
@@ -862,14 +938,773 @@ export class WorldObjectEntity {
     this.meshes.push(rock)
   }
 
+  // ============ ORE ROCKS ============
+  private createOreRock() {
+    const res = SharedResources.get()
+
+    // Base rock boulder
+    const rock = MeshBuilder.CreateSphere(
+      'oreBase_' + this.id,
+      { diameterX: 0.7, diameterY: 0.5, diameterZ: 0.6, segments: 6 },
+      this.scene
+    )
+    rock.material = res.rockMaterial
+    rock.position.y = 0.25
+    rock.parent = this.node
+    this.meshes.push(rock)
+
+    // Ore veins - color based on type
+    let veinMat = res.copperVeinMaterial
+    if (this.objectType === WorldObjectType.TIN_ORE) {
+      veinMat = res.tinVeinMaterial
+    } else if (this.objectType === WorldObjectType.IRON_ORE) {
+      veinMat = res.ironVeinMaterial
+    } else if (this.objectType === WorldObjectType.COAL_ORE) {
+      veinMat = res.coalVeinMaterial
+    }
+
+    // Add ore vein patches
+    const veinPositions = [
+      { x: 0.2, y: 0.3, z: 0.2 },
+      { x: -0.15, y: 0.35, z: 0.15 },
+      { x: 0.1, y: 0.2, z: -0.2 }
+    ]
+
+    veinPositions.forEach((pos, i) => {
+      const vein = MeshBuilder.CreateSphere(
+        `oreVein${i}_` + this.id,
+        { diameter: 0.12, segments: 4 },
+        this.scene
+      )
+      vein.material = veinMat
+      vein.position.set(pos.x, pos.y, pos.z)
+      vein.parent = this.node
+      this.meshes.push(vein)
+    })
+  }
+
+  // ============ INTERIOR FURNITURE ============
+  private createCounter() {
+    const res = SharedResources.get()
+
+    const counter = MeshBuilder.CreateBox(
+      'counter_' + this.id,
+      { width: 0.9, height: 0.5, depth: 0.4 },
+      this.scene
+    )
+    counter.material = res.darkWoodMaterial
+    counter.position.y = 0.25
+    counter.parent = this.node
+    this.meshes.push(counter)
+
+    const top = MeshBuilder.CreateBox(
+      'counterTop_' + this.id,
+      { width: 0.95, height: 0.05, depth: 0.45 },
+      this.scene
+    )
+    top.material = res.woodMaterial
+    top.position.y = 0.525
+    top.parent = this.node
+    this.meshes.push(top)
+  }
+
+  private createBookshelf() {
+    const res = SharedResources.get()
+
+    const back = MeshBuilder.CreateBox(
+      'bookshelfBack_' + this.id,
+      { width: 0.8, height: 1.0, depth: 0.1 },
+      this.scene
+    )
+    back.material = res.darkWoodMaterial
+    back.position.set(0, 0.5, -0.15)
+    back.parent = this.node
+    this.meshes.push(back)
+
+    // Shelves
+    for (let i = 0; i < 4; i++) {
+      const shelf = MeshBuilder.CreateBox(
+        `bookshelfShelf${i}_` + this.id,
+        { width: 0.8, height: 0.04, depth: 0.25 },
+        this.scene
+      )
+      shelf.material = res.woodMaterial
+      shelf.position.set(0, 0.2 + i * 0.25, 0)
+      shelf.parent = this.node
+      this.meshes.push(shelf)
+    }
+  }
+
+  private createBed() {
+    const res = SharedResources.get()
+
+    // Frame
+    const frame = MeshBuilder.CreateBox(
+      'bedFrame_' + this.id,
+      { width: 0.8, height: 0.2, depth: 1.2 },
+      this.scene
+    )
+    frame.material = res.darkWoodMaterial
+    frame.position.y = 0.1
+    frame.parent = this.node
+    this.meshes.push(frame)
+
+    // Mattress
+    const mattress = MeshBuilder.CreateBox(
+      'bedMattress_' + this.id,
+      { width: 0.7, height: 0.15, depth: 1.0 },
+      this.scene
+    )
+    mattress.material = res.fabricMaterial
+    mattress.position.y = 0.275
+    mattress.parent = this.node
+    this.meshes.push(mattress)
+
+    // Pillow
+    const pillow = MeshBuilder.CreateBox(
+      'bedPillow_' + this.id,
+      { width: 0.5, height: 0.1, depth: 0.2 },
+      this.scene
+    )
+    pillow.material = res.fabricMaterial
+    pillow.position.set(0, 0.4, -0.35)
+    pillow.parent = this.node
+    this.meshes.push(pillow)
+  }
+
+  private createChair() {
+    const res = SharedResources.get()
+
+    // Seat
+    const seat = MeshBuilder.CreateBox(
+      'chairSeat_' + this.id,
+      { width: 0.35, height: 0.04, depth: 0.35 },
+      this.scene
+    )
+    seat.material = res.woodMaterial
+    seat.position.y = 0.3
+    seat.parent = this.node
+    this.meshes.push(seat)
+
+    // Back
+    const back = MeshBuilder.CreateBox(
+      'chairBack_' + this.id,
+      { width: 0.35, height: 0.35, depth: 0.04 },
+      this.scene
+    )
+    back.material = res.woodMaterial
+    back.position.set(0, 0.5, -0.15)
+    back.parent = this.node
+    this.meshes.push(back)
+
+    // Legs
+    const legPositions = [
+      { x: -0.12, z: -0.12 },
+      { x: 0.12, z: -0.12 },
+      { x: -0.12, z: 0.12 },
+      { x: 0.12, z: 0.12 }
+    ]
+    legPositions.forEach((pos, i) => {
+      const leg = MeshBuilder.CreateCylinder(
+        `chairLeg${i}_` + this.id,
+        { height: 0.28, diameter: 0.04, tessellation: 6 },
+        this.scene
+      )
+      leg.material = res.darkWoodMaterial
+      leg.position.set(pos.x, 0.14, pos.z)
+      leg.parent = this.node
+      this.meshes.push(leg)
+    })
+  }
+
+  private createStool() {
+    const res = SharedResources.get()
+
+    const seat = MeshBuilder.CreateCylinder(
+      'stoolSeat_' + this.id,
+      { height: 0.05, diameter: 0.3, tessellation: 12 },
+      this.scene
+    )
+    seat.material = res.woodMaterial
+    seat.position.y = 0.35
+    seat.parent = this.node
+    this.meshes.push(seat)
+
+    // Three legs
+    for (let i = 0; i < 3; i++) {
+      const angle = (i * 2 * Math.PI) / 3
+      const leg = MeshBuilder.CreateCylinder(
+        `stoolLeg${i}_` + this.id,
+        { height: 0.32, diameter: 0.04, tessellation: 6 },
+        this.scene
+      )
+      leg.material = res.darkWoodMaterial
+      leg.position.set(Math.sin(angle) * 0.1, 0.16, Math.cos(angle) * 0.1)
+      leg.parent = this.node
+      this.meshes.push(leg)
+    }
+  }
+
+  private createFireplace() {
+    const res = SharedResources.get()
+
+    // Stone back
+    const back = MeshBuilder.CreateBox(
+      'fireplaceBack_' + this.id,
+      { width: 1.0, height: 0.9, depth: 0.3 },
+      this.scene
+    )
+    back.material = res.stoneMaterial
+    back.position.set(0, 0.45, -0.3)
+    back.parent = this.node
+    this.meshes.push(back)
+
+    // Stone sides
+    const leftSide = MeshBuilder.CreateBox(
+      'fireplaceLeft_' + this.id,
+      { width: 0.2, height: 0.6, depth: 0.4 },
+      this.scene
+    )
+    leftSide.material = res.stoneMaterial
+    leftSide.position.set(-0.45, 0.3, -0.1)
+    leftSide.parent = this.node
+    this.meshes.push(leftSide)
+
+    const rightSide = MeshBuilder.CreateBox(
+      'fireplaceRight_' + this.id,
+      { width: 0.2, height: 0.6, depth: 0.4 },
+      this.scene
+    )
+    rightSide.material = res.stoneMaterial
+    rightSide.position.set(0.45, 0.3, -0.1)
+    rightSide.parent = this.node
+    this.meshes.push(rightSide)
+
+    // Fire
+    const flame = MeshBuilder.CreateCylinder(
+      'fireplaceFlame_' + this.id,
+      { height: 0.35, diameterTop: 0, diameterBottom: 0.3, tessellation: 6 },
+      this.scene
+    )
+    flame.material = res.flameMaterial
+    flame.position.set(0, 0.3, -0.1)
+    flame.parent = this.node
+    this.meshes.push(flame)
+
+    // Mantle
+    const mantle = MeshBuilder.CreateBox(
+      'fireplaceMantle_' + this.id,
+      { width: 1.2, height: 0.08, depth: 0.4 },
+      this.scene
+    )
+    mantle.material = res.darkWoodMaterial
+    mantle.position.set(0, 0.75, -0.05)
+    mantle.parent = this.node
+    this.meshes.push(mantle)
+  }
+
+  private createChest() {
+    const res = SharedResources.get()
+
+    // Body
+    const body = MeshBuilder.CreateBox(
+      'chestBody_' + this.id,
+      { width: 0.5, height: 0.3, depth: 0.35 },
+      this.scene
+    )
+    body.material = res.woodMaterial
+    body.position.y = 0.15
+    body.parent = this.node
+    this.meshes.push(body)
+
+    // Lid
+    const lid = MeshBuilder.CreateCylinder(
+      'chestLid_' + this.id,
+      { height: 0.5, diameter: 0.35, tessellation: 12, arc: 0.5 },
+      this.scene
+    )
+    lid.material = res.woodMaterial
+    lid.rotation.z = Math.PI / 2
+    lid.position.set(0, 0.3, 0)
+    lid.parent = this.node
+    this.meshes.push(lid)
+
+    // Metal bands
+    const band = MeshBuilder.CreateBox(
+      'chestBand_' + this.id,
+      { width: 0.52, height: 0.35, depth: 0.02 },
+      this.scene
+    )
+    band.material = res.ironMaterial
+    band.position.set(0, 0.22, 0.17)
+    band.parent = this.node
+    this.meshes.push(band)
+  }
+
+  private createLadder() {
+    const res = SharedResources.get()
+
+    // Side rails
+    const leftRail = MeshBuilder.CreateBox(
+      'ladderLeft_' + this.id,
+      { width: 0.05, height: 1.2, depth: 0.05 },
+      this.scene
+    )
+    leftRail.material = res.woodMaterial
+    leftRail.position.set(-0.15, 0.6, 0)
+    leftRail.parent = this.node
+    this.meshes.push(leftRail)
+
+    const rightRail = MeshBuilder.CreateBox(
+      'ladderRight_' + this.id,
+      { width: 0.05, height: 1.2, depth: 0.05 },
+      this.scene
+    )
+    rightRail.material = res.woodMaterial
+    rightRail.position.set(0.15, 0.6, 0)
+    rightRail.parent = this.node
+    this.meshes.push(rightRail)
+
+    // Rungs
+    for (let i = 0; i < 5; i++) {
+      const rung = MeshBuilder.CreateBox(
+        `ladderRung${i}_` + this.id,
+        { width: 0.25, height: 0.03, depth: 0.05 },
+        this.scene
+      )
+      rung.material = res.darkWoodMaterial
+      rung.position.set(0, 0.2 + i * 0.22, 0)
+      rung.parent = this.node
+      this.meshes.push(rung)
+    }
+  }
+
+  // ============ WILDERNESS STRUCTURES ============
+  private createGoblinTent() {
+    const res = SharedResources.get()
+
+    // Cone-shaped tent
+    const tent = MeshBuilder.CreateCylinder(
+      'goblinTent_' + this.id,
+      { height: 0.9, diameterTop: 0.05, diameterBottom: 1.0, tessellation: 6 },
+      this.scene
+    )
+    tent.material = res.leatherMaterial
+    tent.position.y = 0.45
+    tent.parent = this.node
+    this.meshes.push(tent)
+
+    // Support poles
+    const poleAngles = [0, Math.PI * 0.66, Math.PI * 1.33]
+    poleAngles.forEach((angle, i) => {
+      const pole = MeshBuilder.CreateCylinder(
+        `tentPole${i}_` + this.id,
+        { height: 1.0, diameter: 0.04, tessellation: 4 },
+        this.scene
+      )
+      pole.material = res.woodMaterial
+      pole.rotation.z = 0.3
+      pole.rotation.y = angle
+      pole.position.y = 0.5
+      pole.parent = this.node
+      this.meshes.push(pole)
+    })
+  }
+
+  private createPalisadeWall() {
+    const res = SharedResources.get()
+
+    // Row of wooden stakes
+    for (let i = 0; i < 5; i++) {
+      const stake = MeshBuilder.CreateCylinder(
+        `palisadeStake${i}_` + this.id,
+        { height: 0.9 + Math.random() * 0.2, diameterTop: 0.02, diameterBottom: 0.08, tessellation: 6 },
+        this.scene
+      )
+      stake.material = res.woodMaterial
+      stake.position.set(-0.3 + i * 0.15, 0.45, 0)
+      stake.parent = this.node
+      this.meshes.push(stake)
+    }
+  }
+
+  private createLargeCampfire() {
+    const res = SharedResources.get()
+
+    // Stone ring
+    for (let i = 0; i < 8; i++) {
+      const angle = (i * 2 * Math.PI) / 8
+      const stone = MeshBuilder.CreateSphere(
+        `campfireStone${i}_` + this.id,
+        { diameter: 0.15, segments: 4 },
+        this.scene
+      )
+      stone.material = res.stoneMaterial
+      stone.position.set(Math.sin(angle) * 0.35, 0.07, Math.cos(angle) * 0.35)
+      stone.parent = this.node
+      this.meshes.push(stone)
+    }
+
+    // Logs
+    for (let i = 0; i < 3; i++) {
+      const log = MeshBuilder.CreateCylinder(
+        `campfireLog${i}_` + this.id,
+        { height: 0.4, diameter: 0.1, tessellation: 6 },
+        this.scene
+      )
+      log.material = res.trunkMaterial
+      log.rotation.z = Math.PI / 2
+      log.rotation.y = (i * Math.PI) / 3
+      log.position.y = 0.08
+      log.parent = this.node
+      this.meshes.push(log)
+    }
+
+    // Large flame
+    const flame = MeshBuilder.CreateCylinder(
+      'campfireFlame_' + this.id,
+      { height: 0.6, diameterTop: 0, diameterBottom: 0.4, tessellation: 6 },
+      this.scene
+    )
+    flame.material = res.flameMaterial
+    flame.position.y = 0.4
+    flame.parent = this.node
+    this.meshes.push(flame)
+  }
+
+  private createBonesPile() {
+    const res = SharedResources.get()
+
+    // Pile of bones (small cylinders)
+    const positions = [
+      { x: 0, y: 0.05, z: 0, rx: 0.3, ry: 0 },
+      { x: 0.1, y: 0.08, z: 0.05, rx: 0.5, ry: 0.5 },
+      { x: -0.08, y: 0.06, z: -0.05, rx: 0.2, ry: 1.0 },
+      { x: 0.05, y: 0.04, z: -0.1, rx: 0.4, ry: 1.5 }
+    ]
+
+    positions.forEach((pos, i) => {
+      const bone = MeshBuilder.CreateCylinder(
+        `bone${i}_` + this.id,
+        { height: 0.2, diameterTop: 0.02, diameterBottom: 0.03, tessellation: 6 },
+        this.scene
+      )
+      bone.material = res.boneMaterial
+      bone.position.set(pos.x, pos.y, pos.z)
+      bone.rotation.x = pos.rx
+      bone.rotation.y = pos.ry
+      bone.parent = this.node
+      this.meshes.push(bone)
+    })
+  }
+
+  // ============ RUINS ============
+  private createRuinedWall() {
+    const res = SharedResources.get()
+
+    // Broken wall segment
+    const wall = MeshBuilder.CreateBox(
+      'ruinedWall_' + this.id,
+      { width: 0.9, height: 0.6 + Math.random() * 0.3, depth: 0.2 },
+      this.scene
+    )
+    wall.material = res.oldStoneMaterial
+    wall.position.y = 0.4
+    wall.parent = this.node
+    this.meshes.push(wall)
+
+    // Rubble at base
+    const rubble = MeshBuilder.CreateSphere(
+      'wallRubble_' + this.id,
+      { diameterX: 0.4, diameterY: 0.15, diameterZ: 0.3, segments: 4 },
+      this.scene
+    )
+    rubble.material = res.oldStoneMaterial
+    rubble.position.set(0.2, 0.07, 0.15)
+    rubble.parent = this.node
+    this.meshes.push(rubble)
+  }
+
+  private createRuinedColumn() {
+    const res = SharedResources.get()
+
+    // Base
+    const base = MeshBuilder.CreateBox(
+      'columnBase_' + this.id,
+      { width: 0.45, height: 0.12, depth: 0.45 },
+      this.scene
+    )
+    base.material = res.oldStoneMaterial
+    base.position.y = 0.06
+    base.parent = this.node
+    this.meshes.push(base)
+
+    // Shaft (variable height)
+    const height = 0.5 + Math.random() * 0.4
+    const shaft = MeshBuilder.CreateCylinder(
+      'columnShaft_' + this.id,
+      { height, diameter: 0.3, tessellation: 8 },
+      this.scene
+    )
+    shaft.material = res.oldStoneMaterial
+    shaft.position.y = 0.12 + height / 2
+    shaft.parent = this.node
+    this.meshes.push(shaft)
+  }
+
+  private createStoneRubble() {
+    const res = SharedResources.get()
+
+    // Pile of stone chunks
+    for (let i = 0; i < 4; i++) {
+      const chunk = MeshBuilder.CreateSphere(
+        `rubbleChunk${i}_` + this.id,
+        { diameterX: 0.15 + Math.random() * 0.1, diameterY: 0.1, diameterZ: 0.12, segments: 4 },
+        this.scene
+      )
+      chunk.material = res.oldStoneMaterial
+      chunk.position.set(
+        (Math.random() - 0.5) * 0.3,
+        0.05 + Math.random() * 0.05,
+        (Math.random() - 0.5) * 0.3
+      )
+      chunk.parent = this.node
+      this.meshes.push(chunk)
+    }
+  }
+
+  private createAncientAltar() {
+    const res = SharedResources.get()
+
+    // Large stone base
+    const base = MeshBuilder.CreateBox(
+      'altarBase_' + this.id,
+      { width: 0.9, height: 0.4, depth: 0.6 },
+      this.scene
+    )
+    base.material = res.oldStoneMaterial
+    base.position.y = 0.2
+    base.parent = this.node
+    this.meshes.push(base)
+
+    // Top slab
+    const top = MeshBuilder.CreateBox(
+      'altarTop_' + this.id,
+      { width: 1.0, height: 0.1, depth: 0.7 },
+      this.scene
+    )
+    top.material = res.darkStoneMaterial
+    top.position.y = 0.45
+    top.parent = this.node
+    this.meshes.push(top)
+
+    // Mystical symbol (simple decoration)
+    const symbol = MeshBuilder.CreateTorus(
+      'altarSymbol_' + this.id,
+      { diameter: 0.3, thickness: 0.02, tessellation: 16 },
+      this.scene
+    )
+    symbol.material = res.goldMaterial
+    symbol.rotation.x = Math.PI / 2
+    symbol.position.y = 0.51
+    symbol.parent = this.node
+    this.meshes.push(symbol)
+  }
+
+  // ============ NATURE ============
+  private createFallenLog() {
+    const res = SharedResources.get()
+
+    const log = MeshBuilder.CreateCylinder(
+      'fallenLog_' + this.id,
+      { height: 1.0, diameterTop: 0.2, diameterBottom: 0.25, tessellation: 8 },
+      this.scene
+    )
+    log.material = res.stumpMaterial
+    log.rotation.z = Math.PI / 2
+    log.position.y = 0.12
+    log.parent = this.node
+    this.meshes.push(log)
+
+    // Moss patches
+    const moss = MeshBuilder.CreateDisc(
+      'logMoss_' + this.id,
+      { radius: 0.15, tessellation: 6 },
+      this.scene
+    )
+    moss.material = res.greenCanopyMaterial
+    moss.rotation.x = Math.PI / 2
+    moss.position.set(0.2, 0.25, 0)
+    moss.parent = this.node
+    this.meshes.push(moss)
+  }
+
+  private createMushroomPatch() {
+    const res = SharedResources.get()
+
+    const positions = [
+      { x: 0, z: 0, scale: 1.0, mat: res.mushroomRedMaterial },
+      { x: 0.15, z: 0.1, scale: 0.7, mat: res.mushroomBrownMaterial },
+      { x: -0.1, z: 0.12, scale: 0.8, mat: res.mushroomRedMaterial },
+      { x: 0.08, z: -0.08, scale: 0.6, mat: res.mushroomBrownMaterial }
+    ]
+
+    positions.forEach((pos, i) => {
+      // Stem
+      const stem = MeshBuilder.CreateCylinder(
+        `mushroomStem${i}_` + this.id,
+        { height: 0.1 * pos.scale, diameter: 0.04 * pos.scale, tessellation: 6 },
+        this.scene
+      )
+      stem.material = res.fabricMaterial
+      stem.position.set(pos.x, 0.05 * pos.scale, pos.z)
+      stem.parent = this.node
+      this.meshes.push(stem)
+
+      // Cap
+      const cap = MeshBuilder.CreateCylinder(
+        `mushroomCap${i}_` + this.id,
+        { height: 0.05 * pos.scale, diameterTop: 0.02 * pos.scale, diameterBottom: 0.1 * pos.scale, tessellation: 8 },
+        this.scene
+      )
+      cap.material = pos.mat
+      cap.position.set(pos.x, 0.12 * pos.scale, pos.z)
+      cap.parent = this.node
+      this.meshes.push(cap)
+    })
+  }
+
+  private createOldStump() {
+    const res = SharedResources.get()
+
+    const stump = MeshBuilder.CreateCylinder(
+      'oldStump_' + this.id,
+      { height: 0.25, diameterTop: 0.35, diameterBottom: 0.4, tessellation: 8 },
+      this.scene
+    )
+    stump.material = res.stumpMaterial
+    stump.position.y = 0.125
+    stump.parent = this.node
+    this.meshes.push(stump)
+
+    // Rings on top
+    const top = MeshBuilder.CreateDisc(
+      'stumpTop_' + this.id,
+      { radius: 0.175, tessellation: 8 },
+      this.scene
+    )
+    top.material = res.stumpTopMaterial
+    top.rotation.x = -Math.PI / 2
+    top.position.y = 0.251
+    top.parent = this.node
+    this.meshes.push(top)
+  }
+
+  // ============ MINE PROPS ============
+  private createMineCart() {
+    const res = SharedResources.get()
+
+    // Cart body
+    const body = MeshBuilder.CreateBox(
+      'cartBody_' + this.id,
+      { width: 0.5, height: 0.25, depth: 0.35 },
+      this.scene
+    )
+    body.material = res.woodMaterial
+    body.position.y = 0.25
+    body.parent = this.node
+    this.meshes.push(body)
+
+    // Wheels
+    const wheelPositions = [
+      { x: -0.2, z: 0.15 },
+      { x: 0.2, z: 0.15 },
+      { x: -0.2, z: -0.15 },
+      { x: 0.2, z: -0.15 }
+    ]
+    wheelPositions.forEach((pos, i) => {
+      const wheel = MeshBuilder.CreateCylinder(
+        `cartWheel${i}_` + this.id,
+        { height: 0.04, diameter: 0.15, tessellation: 12 },
+        this.scene
+      )
+      wheel.material = res.ironMaterial
+      wheel.rotation.x = Math.PI / 2
+      wheel.position.set(pos.x, 0.08, pos.z)
+      wheel.parent = this.node
+      this.meshes.push(wheel)
+    })
+  }
+
+  private createMineEntrance() {
+    const res = SharedResources.get()
+
+    // Frame posts
+    const leftPost = MeshBuilder.CreateBox(
+      'minePostLeft_' + this.id,
+      { width: 0.12, height: 1.0, depth: 0.12 },
+      this.scene
+    )
+    leftPost.material = res.darkWoodMaterial
+    leftPost.position.set(-0.35, 0.5, 0)
+    leftPost.parent = this.node
+    this.meshes.push(leftPost)
+
+    const rightPost = MeshBuilder.CreateBox(
+      'minePostRight_' + this.id,
+      { width: 0.12, height: 1.0, depth: 0.12 },
+      this.scene
+    )
+    rightPost.material = res.darkWoodMaterial
+    rightPost.position.set(0.35, 0.5, 0)
+    rightPost.parent = this.node
+    this.meshes.push(rightPost)
+
+    // Top beam
+    const beam = MeshBuilder.CreateBox(
+      'mineBeam_' + this.id,
+      { width: 0.85, height: 0.12, depth: 0.12 },
+      this.scene
+    )
+    beam.material = res.darkWoodMaterial
+    beam.position.y = 1.0
+    beam.parent = this.node
+    this.meshes.push(beam)
+
+    // Dark entrance
+    const entrance = MeshBuilder.CreateBox(
+      'mineEntrance_' + this.id,
+      { width: 0.6, height: 0.85, depth: 0.1 },
+      this.scene
+    )
+    entrance.material = res.darkStoneMaterial
+    entrance.position.set(0, 0.45, -0.05)
+    entrance.parent = this.node
+    this.meshes.push(entrance)
+
+    // Boards (boarded up)
+    for (let i = 0; i < 3; i++) {
+      const board = MeshBuilder.CreateBox(
+        `mineBoard${i}_` + this.id,
+        { width: 0.7, height: 0.08, depth: 0.02 },
+        this.scene
+      )
+      board.material = res.woodMaterial
+      board.position.set(0, 0.25 + i * 0.25, 0.02)
+      board.rotation.z = (Math.random() - 0.5) * 0.15
+      board.parent = this.node
+      this.meshes.push(board)
+    }
+  }
+
   private createDepletedObject() {
+    const res = SharedResources.get()
+
     if (
       this.objectType === WorldObjectType.TREE ||
       this.objectType === WorldObjectType.OAK_TREE ||
       this.objectType === WorldObjectType.WILLOW_TREE
     ) {
-      const res = SharedResources.get()
-
       // Tree stump
       const stump = MeshBuilder.CreateCylinder(
         'stump_' + this.id,
@@ -892,6 +1727,22 @@ export class WorldObjectEntity {
       top.position.y = 0.201
       top.parent = this.node
       this.meshes.push(top)
+    } else if (
+      this.objectType === WorldObjectType.COPPER_ORE ||
+      this.objectType === WorldObjectType.TIN_ORE ||
+      this.objectType === WorldObjectType.IRON_ORE ||
+      this.objectType === WorldObjectType.COAL_ORE
+    ) {
+      // Depleted ore - grey rock without ore veins
+      const rock = MeshBuilder.CreateSphere(
+        'depletedOre_' + this.id,
+        { diameterX: 0.65, diameterY: 0.4, diameterZ: 0.55, segments: 6 },
+        this.scene
+      )
+      rock.material = res.darkStoneMaterial
+      rock.position.y = 0.2
+      rock.parent = this.node
+      this.meshes.push(rock)
     }
   }
 

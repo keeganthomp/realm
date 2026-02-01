@@ -38,7 +38,18 @@ export enum ItemType {
 
   // Cooked meat
   COOKED_CHICKEN = 'cooked_chicken',
-  COOKED_BEEF = 'cooked_beef'
+  COOKED_BEEF = 'cooked_beef',
+
+  // Mining ores
+  COPPER_ORE = 'copper_ore',
+  TIN_ORE = 'tin_ore',
+  IRON_ORE = 'iron_ore',
+  COAL = 'coal',
+
+  // Metal bars (smelted)
+  BRONZE_BAR = 'bronze_bar',
+  IRON_BAR = 'iron_bar',
+  STEEL_BAR = 'steel_bar'
 }
 
 export interface ItemDefinition {
@@ -213,6 +224,59 @@ export const ITEM_DEFINITIONS: Record<ItemType, ItemDefinition> = {
     description: 'Heals 3 HP',
     stackable: false,
     value: 10
+  },
+
+  // Mining ores
+  [ItemType.COPPER_ORE]: {
+    type: ItemType.COPPER_ORE,
+    name: 'Copper Ore',
+    description: 'Can be smelted with tin to make bronze',
+    stackable: false,
+    value: 5
+  },
+  [ItemType.TIN_ORE]: {
+    type: ItemType.TIN_ORE,
+    name: 'Tin Ore',
+    description: 'Can be smelted with copper to make bronze',
+    stackable: false,
+    value: 5
+  },
+  [ItemType.IRON_ORE]: {
+    type: ItemType.IRON_ORE,
+    name: 'Iron Ore',
+    description: 'Can be smelted into an iron bar',
+    stackable: false,
+    value: 25
+  },
+  [ItemType.COAL]: {
+    type: ItemType.COAL,
+    name: 'Coal',
+    description: 'Used to smelt higher-level ores',
+    stackable: false,
+    value: 45
+  },
+
+  // Metal bars
+  [ItemType.BRONZE_BAR]: {
+    type: ItemType.BRONZE_BAR,
+    name: 'Bronze Bar',
+    description: 'Used to smith bronze items',
+    stackable: false,
+    value: 15
+  },
+  [ItemType.IRON_BAR]: {
+    type: ItemType.IRON_BAR,
+    name: 'Iron Bar',
+    description: 'Used to smith iron items',
+    stackable: false,
+    value: 75
+  },
+  [ItemType.STEEL_BAR]: {
+    type: ItemType.STEEL_BAR,
+    name: 'Steel Bar',
+    description: 'Used to smith steel items',
+    stackable: false,
+    value: 150
   }
 }
 

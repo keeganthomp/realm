@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ItemType, ITEM_DEFINITIONS, isFood } from '@realm/shared'
 
 interface InventoryPanelProps {
@@ -58,6 +59,22 @@ export function InventoryPanel({
     null
   )
 
+  // Close context menu when clicking anywhere outside
+  useEffect(() => {
+    if (!contextMenu) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      // Check if click is on the context menu itself
+      const target = e.target as HTMLElement
+      if (target.closest('[data-context-menu]')) return
+      setContextMenu(null)
+    }
+
+    // Use capture phase to catch clicks before they're stopped
+    document.addEventListener('mousedown', handleClickOutside, true)
+    return () => document.removeEventListener('mousedown', handleClickOutside, true)
+  }, [contextMenu])
+
   // Create 28 slots, filling with items
   const slots = useMemo(() => {
     const result: Array<{ itemType: string; quantity: number } | null> = []
@@ -71,13 +88,14 @@ export function InventoryPanel({
 
   const handleSlotClick = useCallback(
     (index: number) => {
+      // Always close context menu when clicking a slot
+      setContextMenu(null)
       if (!slots[index]) {
         onSelectItem(null)
         return
       }
       // Toggle selection
       onSelectItem(selectedIndex === index ? null : index)
-      setContextMenu(null)
     },
     [slots, selectedIndex, onSelectItem]
   )
@@ -108,14 +126,8 @@ export function InventoryPanel({
     }
   }, [contextMenu, onEatFood])
 
-  // Close context menu when clicking elsewhere
-  const handlePanelClick = useCallback(() => {
-    setContextMenu(null)
-  }, [])
-
   return (
     <div
-      onClick={handlePanelClick}
       style={{ ...panelStyle, width: 210, position: 'relative' }}
     >
       {/* Header */}
@@ -224,9 +236,10 @@ export function InventoryPanel({
           )}
       </div>
 
-      {/* Context menu */}
-      {contextMenu && (
+      {/* Context menu - rendered in portal to avoid stacking context issues */}
+      {contextMenu && createPortal(
         <div
+          data-context-menu
           style={{
             position: 'fixed',
             left: contextMenu.x,
@@ -235,7 +248,7 @@ export function InventoryPanel({
             borderRadius: 6,
             border: '1px solid rgba(255, 255, 255, 0.1)',
             overflow: 'hidden',
-            zIndex: 1000,
+            zIndex: 10000,
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
             minWidth: 100
           }}
@@ -244,10 +257,7 @@ export function InventoryPanel({
           {items[contextMenu.index] &&
             isFood(items[contextMenu.index].itemType as ItemType) && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleEat()
-                }}
+                onClick={handleEat}
                 style={{
                   display: 'block',
                   width: '100%',
@@ -272,10 +282,7 @@ export function InventoryPanel({
               </button>
             )}
           <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleDrop()
-            }}
+            onClick={handleDrop}
             style={{
               display: 'block',
               width: '100%',
@@ -298,7 +305,8 @@ export function InventoryPanel({
           >
             Drop
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -12,6 +12,7 @@ import {
   getLevelFromXp,
   WorldObjectType,
   WORLD_OBJECT_DEFINITIONS,
+  ActionCategory,
   COOKING_RECIPES,
   getBurnChance,
   ItemType,
@@ -141,6 +142,16 @@ export class WorldRoom extends Room {
     // Handle withdrawing item from bank
     this.onMessage('bankWithdraw', (client, data: { bankSlot: number; quantity: number }) => {
       this.handleBankWithdraw(client, data.bankSlot, data.quantity)
+    })
+
+    // Handle buying from shop
+    this.onMessage('shopBuy', (client, data: { shopId: string; itemType: string; quantity: number }) => {
+      this.handleShopBuy(client, data.shopId, data.itemType as ItemType, data.quantity)
+    })
+
+    // Handle selling to shop
+    this.onMessage('shopSell', (client, data: { shopId: string; itemIndex: number; quantity: number }) => {
+      this.handleShopSell(client, data.shopId, data.itemIndex, data.quantity)
     })
 
     // Handle chat
@@ -290,8 +301,8 @@ export class WorldRoom extends Room {
     if (!player) return
 
     const worldObj = this.state.worldObjects.get(objectId)
-    if (!worldObj || worldObj.depleted) {
-      client.send('actionError', { message: 'Object not available' })
+    if (!worldObj) {
+      client.send('actionError', { message: 'Object not found' })
       return
     }
 
@@ -301,27 +312,63 @@ export class WorldRoom extends Room {
       return
     }
 
-    // Special handling for bank booth
-    if (worldObj.objectType === WorldObjectType.BANK_BOOTH) {
-      this.handleOpenBank(client)
-      return
-    }
-
     const objDef = WORLD_OBJECT_DEFINITIONS[worldObj.objectType as WorldObjectType]
     if (!objDef) return
 
+    // Route by action category
+    switch (objDef.actionCategory) {
+      case ActionCategory.BANK:
+        this.handleOpenBank(client)
+        return
+
+      case ActionCategory.SHOP:
+        this.handleOpenShop(client, objDef.shopId || 'general_store')
+        return
+
+      case ActionCategory.EXAMINE:
+      case ActionCategory.READ:
+        // Send examine/read text to client - no inventory/skill checks
+        client.send('examineResult', {
+          objectId,
+          name: objDef.name,
+          text: objDef.examineText || `A ${objDef.name.toLowerCase()}.`,
+          isReadable: objDef.actionCategory === ActionCategory.READ
+        })
+        return
+
+      case ActionCategory.NONE:
+        // No interaction for purely decorative objects
+        return
+
+      case ActionCategory.SKILL:
+        // Skill actions require additional checks
+        break
+
+      default:
+        return
+    }
+
+    // === SKILL ACTION HANDLING ===
+
+    // Check if object is depleted (only relevant for skill objects)
+    if (worldObj.depleted) {
+      client.send('actionError', { message: 'Object not available' })
+      return
+    }
+
     // Check level requirement
-    const skillXp = player.skills.get(objDef.skill)?.xp || 0
+    const skill = objDef.skill!
+    const skillXp = player.skills.get(skill)?.xp || 0
     const playerLevel = getLevelFromXp(skillXp)
-    if (playerLevel < objDef.levelRequired) {
+    if (playerLevel < (objDef.levelRequired || 1)) {
       client.send('actionError', {
-        message: `Need level ${objDef.levelRequired} ${objDef.skill}`
+        message: `Need level ${objDef.levelRequired} ${skill}`
       })
       return
     }
 
     // Check inventory space (except for cooking which transforms items)
-    if (objDef.skill !== SkillType.COOKING && player.inventory.length >= MAX_INVENTORY_SIZE) {
+    if (skill !== SkillType.COOKING && player.inventory.length >= MAX_INVENTORY_SIZE) {
       client.send('actionError', { message: 'Inventory full' })
       return
     }
@@ -331,22 +378,179 @@ export class WorldRoom extends Room {
 
     // Start the action
     const action = new CurrentAction()
-    action.actionType = objDef.skill
+    action.actionType = skill
     action.targetId = objectId
     action.startTime = Date.now()
-    action.duration = objDef.actionTime
+    action.duration = objDef.actionTime || 0
     player.currentAction = action
 
     // Set timer for action completion
     const timer = setTimeout(() => {
       this.completeAction(client.sessionId)
-    }, objDef.actionTime)
+    }, objDef.actionTime || 0)
     this.actionTimers.set(client.sessionId, timer)
 
     client.send('actionStarted', {
       objectId,
-      duration: objDef.actionTime,
+      duration: objDef.actionTime || 0,
       action: objDef.action
+    })
+  }
+
+  private handleOpenShop(client: Client, shopId: string) {
+    // Send shop data to client
+    const shopData = this.getShopData(shopId)
+    client.send('openShop', {
+      shopId,
+      name: shopData.name,
+      items: shopData.items
+    })
+  }
+
+  private getShopData(shopId: string): { name: string; items: { itemType: ItemType; price: number; stock: number }[] } {
+    // Shop inventories
+    const shops: Record<string, { name: string; items: { itemType: ItemType; price: number; stock: number }[] }> = {
+      food_stall: {
+        name: 'Food Stall',
+        items: [
+          { itemType: ItemType.COOKED_SHRIMP, price: 15, stock: 10 },
+          { itemType: ItemType.COOKED_CHICKEN, price: 15, stock: 10 },
+          { itemType: ItemType.COOKED_BEEF, price: 15, stock: 10 },
+          { itemType: ItemType.COOKED_TROUT, price: 50, stock: 5 }
+        ]
+      },
+      weapons_stall: {
+        name: 'Weapons Stall',
+        items: [
+          // Placeholder - add weapons when equipment system is ready
+        ]
+      },
+      general_store: {
+        name: 'General Store',
+        items: [
+          { itemType: ItemType.FISHING_BAIT, price: 5, stock: 100 },
+          { itemType: ItemType.FEATHERS, price: 3, stock: 100 }
+        ]
+      },
+      fish_stall: {
+        name: 'Fish Stall',
+        items: [
+          { itemType: ItemType.RAW_SHRIMP, price: 8, stock: 20 },
+          { itemType: ItemType.RAW_TROUT, price: 30, stock: 10 },
+          { itemType: ItemType.FISHING_BAIT, price: 5, stock: 50 }
+        ]
+      }
+    }
+    return shops[shopId] || { name: 'Shop', items: [] }
+  }
+
+  private handleShopBuy(client: Client, shopId: string, itemType: ItemType, quantity: number) {
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+
+    const shop = this.getShopData(shopId)
+    const shopItem = shop.items.find(i => i.itemType === itemType)
+
+    if (!shopItem) {
+      client.send('shopError', { message: 'Item not sold here' })
+      return
+    }
+
+    // Check if player has enough gold
+    const totalCost = shopItem.price * quantity
+    const coinsIndex = player.inventory.toArray().findIndex(
+      item => item && item.itemType === ItemType.COINS
+    )
+
+    if (coinsIndex === -1) {
+      client.send('shopError', { message: 'You need coins to buy items' })
+      return
+    }
+
+    const coinsItem = player.inventory[coinsIndex]
+    if (coinsItem.quantity < totalCost) {
+      client.send('shopError', { message: 'Not enough coins' })
+      return
+    }
+
+    // Check inventory space
+    const itemDef = ITEM_DEFINITIONS[itemType]
+    if (!itemDef) return
+
+    if (itemDef.stackable) {
+      // Stackable items can go into existing stack
+      const existingIndex = player.inventory.toArray().findIndex(
+        item => item && item.itemType === itemType
+      )
+      if (existingIndex === -1 && player.inventory.length >= MAX_INVENTORY_SIZE) {
+        client.send('shopError', { message: 'Inventory full' })
+        return
+      }
+    } else {
+      // Non-stackable items need slots for each
+      const emptySlots = MAX_INVENTORY_SIZE - player.inventory.length
+      if (emptySlots < quantity) {
+        client.send('shopError', { message: 'Not enough inventory space' })
+        return
+      }
+    }
+
+    // Deduct gold
+    coinsItem.quantity -= totalCost
+    if (coinsItem.quantity <= 0) {
+      player.inventory.splice(coinsIndex, 1)
+    }
+
+    // Add items to inventory
+    this.addItemToInventory(player, itemType, quantity)
+
+    // Mark for save
+    this.pendingSaves.add(client.sessionId)
+
+    // Send confirmation
+    client.send('shopBuySuccess', {
+      itemType,
+      quantity,
+      totalCost
+    })
+  }
+
+  private handleShopSell(client: Client, shopId: string, itemIndex: number, quantity: number) {
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+
+    if (itemIndex < 0 || itemIndex >= player.inventory.length) {
+      client.send('shopError', { message: 'Invalid item' })
+      return
+    }
+
+    const item = player.inventory[itemIndex]
+    if (!item) return
+
+    const itemDef = ITEM_DEFINITIONS[item.itemType as ItemType]
+    if (!itemDef) return
+
+    // Calculate sell price (half of buy value)
+    const sellPrice = Math.floor(itemDef.value * quantity / 2)
+
+    // Remove items from inventory
+    if (item.quantity <= quantity) {
+      player.inventory.splice(itemIndex, 1)
+    } else {
+      item.quantity -= quantity
+    }
+
+    // Add gold to inventory
+    this.addItemToInventory(player, ItemType.COINS, sellPrice)
+
+    // Mark for save
+    this.pendingSaves.add(client.sessionId)
+
+    // Send confirmation
+    client.send('shopSellSuccess', {
+      itemType: item.itemType,
+      quantity,
+      goldReceived: sellPrice
     })
   }
 
@@ -362,10 +566,17 @@ export class WorldRoom extends Room {
     }
 
     const objDef = WORLD_OBJECT_DEFINITIONS[worldObj.objectType as WorldObjectType]
-    if (!objDef) {
+    if (!objDef || objDef.actionCategory !== ActionCategory.SKILL) {
       player.currentAction = null
       return
     }
+
+    // Ensure we have skill data for this object
+    const skill = objDef.skill!
+    const xpGain = objDef.xpGain || 0
+    const yields = objDef.yields!
+    const depletionChance = objDef.depletionChance || 0
+    const respawnTime = objDef.respawnTime || 0
 
     // Ensure player is still in range
     if (!this.isPlayerInRangeOfObject(player, worldObj)) {
@@ -376,32 +587,32 @@ export class WorldRoom extends Room {
     }
 
     // Grant XP
-    const skillData = player.skills.get(objDef.skill)
+    const skillData = player.skills.get(skill)
     if (skillData) {
       const oldLevel = getLevelFromXp(skillData.xp)
-      skillData.xp += Math.floor(objDef.xpGain)
+      skillData.xp += Math.floor(xpGain)
       const newLevel = getLevelFromXp(skillData.xp)
 
       // Level up notification
       if (newLevel > oldLevel) {
         this.broadcast('levelUp', {
           playerName: player.name,
-          skill: objDef.skill,
+          skill,
           newLevel
         })
       }
     }
 
     // Grant item (with stacking support)
-    this.addItemToInventory(player, objDef.yields, 1)
+    this.addItemToInventory(player, yields, 1)
 
     // Mark player as having unsaved changes
     this.pendingSaves.add(sessionId)
 
-    // Check for depletion (trees)
-    if (objDef.depletionChance > 0 && Math.random() < objDef.depletionChance) {
+    // Check for depletion (trees, ores)
+    if (depletionChance > 0 && Math.random() < depletionChance) {
       worldObj.depleted = true
-      worldObj.respawnAt = Date.now() + objDef.respawnTime
+      worldObj.respawnAt = Date.now() + respawnTime
       this.updateCachedObjectState(objectId)
       // Broadcast depletion to all clients
       this.broadcast('objectUpdate', { id: objectId, depleted: true })
@@ -411,9 +622,9 @@ export class WorldRoom extends Room {
     const client = this.clients.find((c) => c.sessionId === sessionId)
     if (client) {
       client.send('actionComplete', {
-        xpGained: objDef.xpGain,
-        skill: objDef.skill,
-        itemGained: objDef.yields
+        xpGained: xpGain,
+        skill,
+        itemGained: yields
       })
 
       // Send updated skills and inventory immediately

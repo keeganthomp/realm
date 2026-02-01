@@ -50,6 +50,15 @@ export class NetworkManager {
   // Callback for when an NPC is clicked
   public onNpcClicked?: (npcId: string) => void
 
+  // Dialog/examine callbacks
+  public onExamineResult?: (name: string, text: string, isReadable: boolean) => void
+
+  // Shop callbacks
+  public onShopOpened?: (shopId: string, name: string, items: Array<{ itemType: string; price: number; stock: number }>) => void
+  public onShopBuySuccess?: (itemType: string, quantity: number, totalCost: number) => void
+  public onShopSellSuccess?: (itemType: string, quantity: number, goldReceived: number) => void
+  public onShopError?: (message: string) => void
+
   constructor(game: Game) {
     this.game = game
     this.client = new Client(SERVER_URL)
@@ -257,6 +266,40 @@ export class NetworkManager {
         this.onBankOpened?.(data.items)
       }
     )
+
+    // Examine/read result
+    this.room.onMessage(
+      'examineResult',
+      (data: { objectId: string; name: string; text: string; isReadable: boolean }) => {
+        this.onExamineResult?.(data.name, data.text, data.isReadable)
+      }
+    )
+
+    // Shop messages
+    this.room.onMessage(
+      'openShop',
+      (data: { shopId: string; name: string; items: Array<{ itemType: string; price: number; stock: number }> }) => {
+        this.onShopOpened?.(data.shopId, data.name, data.items)
+      }
+    )
+
+    this.room.onMessage(
+      'shopBuySuccess',
+      (data: { itemType: string; quantity: number; totalCost: number }) => {
+        this.onShopBuySuccess?.(data.itemType, data.quantity, data.totalCost)
+      }
+    )
+
+    this.room.onMessage(
+      'shopSellSuccess',
+      (data: { itemType: string; quantity: number; goldReceived: number }) => {
+        this.onShopSellSuccess?.(data.itemType, data.quantity, data.goldReceived)
+      }
+    )
+
+    this.room.onMessage('shopError', (data: { message: string }) => {
+      this.onShopError?.(data.message)
+    })
 
     // Level up
     this.room.onMessage(
@@ -550,6 +593,16 @@ export class NetworkManager {
   setCombatStyle(style: string) {
     if (!this.room) return
     this.room.send('setCombatStyle', { style })
+  }
+
+  shopBuy(shopId: string, itemType: string, quantity: number) {
+    if (!this.room) return
+    this.room.send('shopBuy', { shopId, itemType, quantity })
+  }
+
+  shopSell(shopId: string, itemIndex: number, quantity: number) {
+    if (!this.room) return
+    this.room.send('shopSell', { shopId, itemIndex, quantity })
   }
 
   disconnect() {

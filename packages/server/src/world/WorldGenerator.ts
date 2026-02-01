@@ -5,16 +5,21 @@ import {
   getAllTowns,
   isInTownBounds,
   isBuildingWall,
-  type TownDefinition
+  getAllWildernessZones,
+  isInWildernessZone,
+  type TownDefinition,
+  type WildernessZone
 } from '@realm/shared'
 
 export class WorldGenerator {
   private seed: number
   private towns: TownDefinition[]
+  private wildernessZones: WildernessZone[]
 
   constructor(seed: number) {
     this.seed = seed
     this.towns = getAllTowns()
+    this.wildernessZones = getAllWildernessZones()
   }
 
   generateChunk(chunkX: number, chunkY: number): ChunkData {
@@ -26,23 +31,28 @@ export class WorldGenerator {
       .map(() => Array(CHUNK_SIZE).fill(0))
     const objects: ChunkObjectData[] = []
 
-    // Track which tiles are used by towns
-    const townTiles: Set<string> = new Set()
+    // Track which tiles are used by towns or wilderness zones
+    const reservedTiles: Set<string> = new Set()
 
     // First pass: Apply town tiles
     for (const town of this.towns) {
-      this.applyTownToChunk(chunkX, chunkY, town, tiles, heights, objects, townTiles)
+      this.applyTownToChunk(chunkX, chunkY, town, tiles, heights, objects, reservedTiles)
     }
 
-    // Second pass: Procedural generation for non-town tiles
+    // Second pass: Apply wilderness zones
+    for (const zone of this.wildernessZones) {
+      this.applyWildernessZoneToChunk(chunkX, chunkY, zone, tiles, heights, objects, reservedTiles)
+    }
+
+    // Fourth pass: Procedural generation for unreserved tiles
     for (let localY = 0; localY < CHUNK_SIZE; localY++) {
       for (let localX = 0; localX < CHUNK_SIZE; localX++) {
         const worldX = chunkX * CHUNK_SIZE + localX
         const worldY = chunkY * CHUNK_SIZE + localY
         const key = `${worldX},${worldY}`
 
-        // Skip if this tile is part of a town
-        if (townTiles.has(key)) continue
+        // Skip if this tile is part of a town or wilderness zone
+        if (reservedTiles.has(key)) continue
 
         // Procedural terrain generation
         const heightNoise = this.fractalNoise(worldX, worldY, 0.05)
@@ -187,6 +197,96 @@ export class WorldGenerator {
     }
   }
 
+  private applyWildernessZoneToChunk(
+    chunkX: number,
+    chunkY: number,
+    zone: WildernessZone,
+    tiles: TileType[][],
+    heights: number[][],
+    objects: ChunkObjectData[],
+    reservedTiles: Set<string>
+  ): void {
+    const chunkStartX = chunkX * CHUNK_SIZE
+    const chunkStartY = chunkY * CHUNK_SIZE
+    const chunkEndX = chunkStartX + CHUNK_SIZE
+    const chunkEndY = chunkStartY + CHUNK_SIZE
+
+    // Check if chunk overlaps with zone bounds
+    const zoneEndX = zone.bounds.x + zone.bounds.width
+    const zoneEndY = zone.bounds.y + zone.bounds.height
+
+    if (
+      chunkStartX >= zoneEndX ||
+      chunkEndX <= zone.bounds.x ||
+      chunkStartY >= zoneEndY ||
+      chunkEndY <= zone.bounds.y
+    ) {
+      return // No overlap
+    }
+
+    // Apply base tile and height for zone tiles
+    for (let localY = 0; localY < CHUNK_SIZE; localY++) {
+      for (let localX = 0; localX < CHUNK_SIZE; localX++) {
+        const worldX = chunkStartX + localX
+        const worldY = chunkStartY + localY
+
+        if (!isInWildernessZone(zone, worldX, worldY)) continue
+
+        const key = `${worldX},${worldY}`
+
+        // Don't override town tiles
+        if (reservedTiles.has(key)) continue
+
+        reservedTiles.add(key)
+
+        // Apply zone's base tile if specified
+        if (zone.baseTile !== undefined) {
+          tiles[localY][localX] = zone.baseTile
+        }
+        if (zone.baseHeight !== undefined) {
+          heights[localY][localX] = zone.baseHeight
+        }
+      }
+    }
+
+    // Apply tile overrides
+    if (zone.tileOverrides) {
+      for (const override of zone.tileOverrides) {
+        const worldX = zone.bounds.x + override.x
+        const worldY = zone.bounds.y + override.y
+        const localX = worldX - chunkStartX
+        const localY = worldY - chunkStartY
+
+        if (localX >= 0 && localX < CHUNK_SIZE && localY >= 0 && localY < CHUNK_SIZE) {
+          tiles[localY][localX] = override.tileType
+          if (override.height !== undefined) {
+            heights[localY][localX] = override.height
+          }
+        }
+      }
+    }
+
+    // Add wilderness objects within this chunk
+    for (const obj of zone.objects) {
+      const worldX = zone.bounds.x + obj.x
+      const worldY = zone.bounds.y + obj.y
+
+      if (
+        worldX >= chunkStartX &&
+        worldX < chunkEndX &&
+        worldY >= chunkStartY &&
+        worldY < chunkEndY
+      ) {
+        objects.push({
+          id: `wild_${zone.id}_${obj.id}`,
+          objectType: obj.objectType,
+          x: worldX * TILE_SIZE + TILE_SIZE / 2,
+          y: worldY * TILE_SIZE + TILE_SIZE / 2
+        })
+      }
+    }
+  }
+
   private tryPlaceObject(
     worldX: number,
     worldY: number,
@@ -257,6 +357,7 @@ export class WorldGenerator {
     const chunkEndX = chunkStartX + CHUNK_SIZE
     const chunkEndY = chunkStartY + CHUNK_SIZE
 
+    // Town NPCs
     for (const town of this.towns) {
       for (const npc of town.npcs) {
         const worldX = town.bounds.x + npc.x
@@ -270,6 +371,30 @@ export class WorldGenerator {
         ) {
           spawns.push({
             id: `town_${town.id}_${npc.id}`,
+            npcType: npc.npcType,
+            x: worldX * TILE_SIZE + TILE_SIZE / 2,
+            y: worldY * TILE_SIZE + TILE_SIZE / 2
+          })
+        }
+      }
+    }
+
+    // Wilderness zone NPCs
+    for (const zone of this.wildernessZones) {
+      if (!zone.npcs) continue
+
+      for (const npc of zone.npcs) {
+        const worldX = zone.bounds.x + npc.x
+        const worldY = zone.bounds.y + npc.y
+
+        if (
+          worldX >= chunkStartX &&
+          worldX < chunkEndX &&
+          worldY >= chunkStartY &&
+          worldY < chunkEndY
+        ) {
+          spawns.push({
+            id: `wild_${zone.id}_${npc.id}`,
             npcType: npc.npcType,
             x: worldX * TILE_SIZE + TILE_SIZE / 2,
             y: worldY * TILE_SIZE + TILE_SIZE / 2
