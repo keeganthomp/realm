@@ -513,6 +513,8 @@ export class NetworkManager {
 
     this.room.onMessage('npcAggro', (data: { npcId: string }) => {
       this.onNpcAggro?.(data.npcId)
+      // Set combat target so player shows attack action/animation
+      this.game.setCombatTarget(data.npcId)
     })
 
     this.room.onMessage(
