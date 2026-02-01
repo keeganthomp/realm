@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq, and } from 'drizzle-orm'
 import { Pool } from 'pg'
-import { players, playerSkills, playerInventory } from './schema'
+import { players, playerSkills, playerInventory, playerBank } from './schema'
 import { getInitialSkills } from '@realm/shared'
 
 const pool = new Pool({
@@ -49,6 +49,17 @@ export async function initDatabase() {
       )
     `)
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS player_bank (
+        id SERIAL PRIMARY KEY,
+        player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+        slot INTEGER NOT NULL,
+        item_type VARCHAR(50) NOT NULL,
+        quantity INTEGER DEFAULT 1 NOT NULL,
+        UNIQUE(player_id, slot)
+      )
+    `)
+
     console.log('Database tables initialized')
   } finally {
     client.release()
@@ -60,6 +71,7 @@ export interface PlayerData {
   username: string
   skills: Record<string, number>
   inventory: Array<{ itemType: string; quantity: number }>
+  bank: Array<{ itemType: string; quantity: number }>
 }
 
 export async function getOrCreatePlayer(username: string): Promise<PlayerData> {
@@ -105,11 +117,24 @@ export async function getOrCreatePlayer(username: string): Promise<PlayerData> {
     quantity: row.quantity
   }))
 
+  // Load bank
+  const bankRows = await db
+    .select()
+    .from(playerBank)
+    .where(eq(playerBank.playerId, player.id))
+    .orderBy(playerBank.slot)
+
+  const bank = bankRows.map((row) => ({
+    itemType: row.itemType,
+    quantity: row.quantity
+  }))
+
   return {
     id: player.id,
     username,
     skills,
-    inventory
+    inventory,
+    bank
   }
 }
 
@@ -145,6 +170,25 @@ export async function savePlayerInventory(
       quantity: item.quantity
     }))
     await db.insert(playerInventory).values(inventoryInserts)
+  }
+}
+
+export async function savePlayerBank(
+  playerId: number,
+  bank: Array<{ itemType: string; quantity: number }>
+) {
+  // Clear existing bank
+  await db.delete(playerBank).where(eq(playerBank.playerId, playerId))
+
+  // Insert current bank
+  if (bank.length > 0) {
+    const bankInserts = bank.map((item, slot) => ({
+      playerId,
+      slot,
+      itemType: item.itemType,
+      quantity: item.quantity
+    }))
+    await db.insert(playerBank).values(bankInserts)
   }
 }
 

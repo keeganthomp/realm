@@ -14,7 +14,10 @@ export enum WorldObjectType {
   FISHING_SPOT_ROD = 'fishing_spot_rod',
 
   // Fire
-  FIRE = 'fire'
+  FIRE = 'fire',
+
+  // Bank
+  BANK_BOOTH = 'bank_booth'
 }
 
 export interface WorldObjectDefinition {
@@ -106,6 +109,20 @@ export const WORLD_OBJECT_DEFINITIONS: Record<WorldObjectType, WorldObjectDefini
     actionTime: 1800,
     yields: ItemType.COOKED_SHRIMP, // depends on what you're cooking
     respawnTime: 60000, // fires burn out
+    depletionChance: 0
+  },
+
+  // Bank Booth (special - doesn't grant XP, opens bank UI)
+  [WorldObjectType.BANK_BOOTH]: {
+    type: WorldObjectType.BANK_BOOTH,
+    name: 'Bank Booth',
+    action: 'Bank',
+    skill: SkillType.WOODCUTTING, // Not used, placeholder
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0, // Instant
+    yields: ItemType.LOGS, // Not used, placeholder
+    respawnTime: 0,
     depletionChance: 0
   }
 }

@@ -1,6 +1,9 @@
 // Item System for Realm
 
 export enum ItemType {
+  // Currency
+  COINS = 'coins',
+
   // Logs
   LOGS = 'logs',
   OAK_LOGS = 'oak_logs',
@@ -19,7 +22,11 @@ export enum ItemType {
   COOKED_LOBSTER = 'cooked_lobster',
 
   // Burnt
-  BURNT_FISH = 'burnt_fish'
+  BURNT_FISH = 'burnt_fish',
+
+  // Fishing bait/equipment (stackable)
+  FEATHERS = 'feathers',
+  FISHING_BAIT = 'fishing_bait'
 }
 
 export interface ItemDefinition {
@@ -31,6 +38,31 @@ export interface ItemDefinition {
 }
 
 export const ITEM_DEFINITIONS: Record<ItemType, ItemDefinition> = {
+  // Currency
+  [ItemType.COINS]: {
+    type: ItemType.COINS,
+    name: 'Coins',
+    description: 'Gold coins',
+    stackable: true,
+    value: 1
+  },
+
+  // Stackable supplies
+  [ItemType.FEATHERS]: {
+    type: ItemType.FEATHERS,
+    name: 'Feathers',
+    description: 'Used for fly fishing',
+    stackable: true,
+    value: 2
+  },
+  [ItemType.FISHING_BAIT]: {
+    type: ItemType.FISHING_BAIT,
+    name: 'Fishing Bait',
+    description: 'Used for bait fishing',
+    stackable: true,
+    value: 3
+  },
+
   // Logs
   [ItemType.LOGS]: {
     type: ItemType.LOGS,

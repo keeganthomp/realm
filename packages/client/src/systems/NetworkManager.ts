@@ -24,6 +24,11 @@ export class NetworkManager {
   public onActionComplete?: (xpGained: number, skill: string, itemGained: string) => void
   public onActionError?: (message: string) => void
   public onInventoryChanged?: (items: Array<{ itemType: string; quantity: number }>) => void
+  public onItemDropped?: (itemType: string, quantity: number) => void
+  public onBankOpened?: (items: Array<{ itemType: string; quantity: number }>) => void
+
+  // Callback for when a world object is clicked (can be overridden by App)
+  public onWorldObjectClicked?: (objectId: string) => void
 
   constructor(game: Game) {
     this.game = game
@@ -35,7 +40,12 @@ export class NetworkManager {
     }
 
     this.game.onWorldObjectClick = (objectId) => {
-      this.startAction(objectId)
+      // Allow external handling (e.g., for using items on objects)
+      if (this.onWorldObjectClicked) {
+        this.onWorldObjectClicked(objectId)
+      } else {
+        this.startAction(objectId)
+      }
     }
   }
 
@@ -197,6 +207,17 @@ export class NetworkManager {
       this.onActionError?.(data.message)
     })
 
+    this.room.onMessage('itemDropped', (data: { itemType: string; quantity: number }) => {
+      this.onItemDropped?.(data.itemType, data.quantity)
+    })
+
+    this.room.onMessage(
+      'bankOpened',
+      (data: { items: Array<{ itemType: string; quantity: number }> }) => {
+        this.onBankOpened?.(data.items)
+      }
+    )
+
     // Level up
     this.room.onMessage(
       'levelUp',
@@ -247,6 +268,22 @@ export class NetworkManager {
 
           this.onInventoryChanged?.(data.inventory)
         }
+      }
+    )
+
+    // Live state updates (skills, inventory) after actions
+    this.room.onMessage(
+      'stateUpdate',
+      (data: {
+        skills: Record<string, number>
+        inventory: Array<{ itemType: string; quantity: number }>
+      }) => {
+        const skills = new Map<string, number>()
+        for (const [skillType, xp] of Object.entries(data.skills)) {
+          skills.set(skillType, xp)
+        }
+        this.onSkillsChanged?.(skills)
+        this.onInventoryChanged?.(data.inventory)
       }
     )
 
@@ -306,6 +343,31 @@ export class NetworkManager {
   sendChat(text: string) {
     if (!this.room || !text.trim()) return
     this.room.send('chat', { text: text.trim() })
+  }
+
+  useItemOnObject(itemIndex: number, objectId: string) {
+    if (!this.room) return
+    this.room.send('useItemOnObject', { itemIndex, objectId })
+  }
+
+  dropItem(itemIndex: number) {
+    if (!this.room) return
+    this.room.send('dropItem', { itemIndex })
+  }
+
+  openBank() {
+    if (!this.room) return
+    this.room.send('openBank', {})
+  }
+
+  bankDeposit(itemIndex: number, quantity: number = 1) {
+    if (!this.room) return
+    this.room.send('bankDeposit', { itemIndex, quantity })
+  }
+
+  bankWithdraw(bankSlot: number, quantity: number = 1) {
+    if (!this.room) return
+    this.room.send('bankWithdraw', { bankSlot, quantity })
   }
 
   disconnect() {

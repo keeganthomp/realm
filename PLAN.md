@@ -263,17 +263,17 @@ Level 99 cap (or 120 for endgame)
 
 ---
 
-### Phase 4: Inventory & Items (In Progress)
+### Phase 4: Inventory & Items ✅
 **Goal**: Full item management
 
 - [x] Inventory grid UI (28 slots like RS)
 - [x] Item definitions (shared/items.ts)
 - [x] Items granted from skilling (logs, fish)
 - [x] Inventory persistence to database
-- [ ] Pick up / drop items
-- [ ] Item stacking (coins, arrows)
-- [ ] Use item on object (cook fish on fire)
-- [ ] Bank storage
+- [x] Drop items (right-click context menu)
+- [x] Item stacking (coins, feathers, fishing bait)
+- [x] Use item on object (select raw fish → click fire → cook)
+- [x] Bank storage (click bank booth, deposit/withdraw items)
 
 **Deliverable**: Players can collect and store items
 
@@ -471,16 +471,18 @@ pnpm typecheck        # TypeScript type checking
 
 ## Current Status
 
-**Phases 1-3 Complete** - Core engine, multiplayer, and skill system MVP are working.
+**Phases 1-4 Complete** - Core engine, multiplayer, skill system, and full inventory management are working.
 
-**Phase 4 In Progress** - Inventory UI exists, items are granted from skills, but need:
-- Drop items
-- Use items on objects (cooking)
-- Item stacking
+Features implemented in Phase 4:
+- Drop items via right-click context menu
+- Item stacking for stackable items (coins, feathers, fishing bait)
+- Use item on object: select raw fish in inventory, click fire to cook
+- Bank storage: click bank booth to open, deposit/withdraw items with persistence
 
 ## Next Steps
 
-1. Fix remaining skill sync issues (UI should update in real-time)
-2. Implement "use item on object" for cooking
-3. Add drop item functionality
-4. Begin Phase 5: Combat System
+1. Begin Phase 5: Combat System
+   - Combat stats (Attack, Strength, Defence, Hitpoints)
+   - NPC spawning and AI
+   - Click-to-attack targeting
+   - Damage calculation formulas

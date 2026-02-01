@@ -1,4 +1,13 @@
-import { Application, Container } from 'pixi.js'
+/* eslint-disable no-undef */
+import {
+  Engine,
+  Scene,
+  ArcRotateCamera,
+  HemisphericLight,
+  Vector3,
+  Color4,
+  PointerEventTypes
+} from '@babylonjs/core'
 import { Player } from './entities/Player'
 import { RemotePlayer } from './entities/RemotePlayer'
 import { WorldObjectEntity } from './entities/WorldObjectEntity'
@@ -9,40 +18,56 @@ import { worldToTile, tileToWorld, WorldObjectType, TILE_SIZE } from '@realm/sha
 import type { Position, Direction } from '@realm/shared'
 
 export class Game {
-  private app!: Application
-  private worldContainer!: Container
-  private objectsContainer!: Container
-  private entitiesContainer!: Container
+  private engine!: Engine
+  private scene!: Scene
+  private arcCamera!: ArcRotateCamera
   private player!: Player
   private remotePlayers: Map<string, RemotePlayer> = new Map()
   private worldObjects: Map<string, WorldObjectEntity> = new Map()
   private tilemap!: TilemapRenderer
   private camera!: Camera
   private pathfinding!: Pathfinding
+  private lastTime: number = 0
 
   // Callbacks
   public onLocalPlayerMove?: (position: Position, path: Position[]) => void
   public onWorldObjectClick?: (objectId: string, objectPosition: Position) => void
 
-  // eslint-disable-next-line no-undef
   async init(container: HTMLElement) {
-    this.app = new Application()
-    await this.app.init({
-      background: '#1a1a2e',
-      resizeTo: container,
-      antialias: false,
-      roundPixels: true
-    })
+    // Create canvas for Babylon.js
+    const canvas = document.createElement('canvas')
+    canvas.style.width = '100%'
+    canvas.style.height = '100%'
+    canvas.style.display = 'block'
+    container.appendChild(canvas)
 
-    container.appendChild(this.app.canvas)
+    // Initialize Babylon.js engine
+    this.engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true })
+    this.scene = new Scene(this.engine)
+    this.scene.clearColor = new Color4(0.1, 0.1, 0.18, 1) // #1a1a2e
 
-    // Create containers (order matters for z-index)
-    this.worldContainer = new Container()
-    this.objectsContainer = new Container() // Trees, fishing spots
-    this.entitiesContainer = new Container() // Players
-    this.worldContainer.addChild(this.objectsContainer)
-    this.worldContainer.addChild(this.entitiesContainer)
-    this.app.stage.addChild(this.worldContainer)
+    // Setup orthographic camera with isometric angle
+    // alpha = 45° rotation, beta = 55° from vertical
+    this.arcCamera = new ArcRotateCamera(
+      'camera',
+      Math.PI / 4, // 45° alpha (rotation around Y axis)
+      Math.PI / 3, // 55° beta (angle from top)
+      50, // radius (will be used for ortho sizing)
+      Vector3.Zero(),
+      this.scene
+    )
+
+    // Set orthographic mode
+    this.arcCamera.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA
+    this.updateCameraOrtho()
+
+    // Disable camera controls (we manage camera position)
+    this.arcCamera.attachControl(canvas, false)
+    this.arcCamera.inputs.clear()
+
+    // Add ambient lighting
+    const light = new HemisphericLight('light', new Vector3(0.5, 1, 0.5), this.scene)
+    light.intensity = 1.0
 
     await this.initSystems()
     await this.initPlayer()
@@ -51,19 +76,33 @@ export class Game {
     window.addEventListener('resize', this.handleResize)
   }
 
+  private updateCameraOrtho() {
+    const canvas = this.engine.getRenderingCanvas()
+    if (!canvas) return
+
+    const aspect = canvas.width / canvas.height
+    const orthoSize = 15 // Controls zoom level
+
+    this.arcCamera.orthoLeft = -orthoSize * aspect
+    this.arcCamera.orthoRight = orthoSize * aspect
+    this.arcCamera.orthoTop = orthoSize
+    this.arcCamera.orthoBottom = -orthoSize
+  }
+
   private async initSystems() {
-    this.tilemap = new TilemapRenderer()
+    this.tilemap = new TilemapRenderer(this.scene)
     await this.tilemap.init()
-    // Insert tilemap at bottom of world container
-    this.worldContainer.addChildAt(this.tilemap.container, 0)
 
     this.pathfinding = new Pathfinding(this.tilemap.getCollisionGrid())
 
+    const canvas = this.engine.getRenderingCanvas()!
     this.camera = new Camera(
-      this.app.screen.width,
-      this.app.screen.height,
+      canvas.width,
+      canvas.height,
       this.tilemap.worldWidth,
-      this.tilemap.worldHeight
+      this.tilemap.worldHeight,
+      this.arcCamera,
+      this.scene
     )
   }
 
@@ -71,40 +110,40 @@ export class Game {
     const startTile = { tileX: 10, tileY: 10 }
     const startPos = tileToWorld(startTile)
 
-    this.player = new Player(startPos)
+    this.player = new Player(startPos, this.scene)
     await this.player.init()
-    this.entitiesContainer.addChild(this.player.sprite)
 
     this.camera.follow(this.player.position)
   }
 
   private setupInput() {
-    this.app.canvas.addEventListener('click', this.handleClick)
-    this.app.canvas.addEventListener('contextmenu', this.handleContextMenu)
+    this.scene.onPointerObservable.add((pointerInfo) => {
+      if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
+        // Right click for context menu prevention
+        if (pointerInfo.event.button === 2) {
+          pointerInfo.event.preventDefault()
+        }
+        this.processClick(pointerInfo.event as PointerEvent)
+      }
+    })
+
+    // Prevent context menu
+    const canvas = this.engine.getRenderingCanvas()
+    if (canvas) {
+      canvas.addEventListener('contextmenu', (e) => e.preventDefault())
+    }
   }
 
-  private handleClick = (e: MouseEvent) => {
-    this.processClick(e)
-  }
-
-  private handleContextMenu = (e: MouseEvent) => {
-    e.preventDefault()
-    this.processClick(e)
-  }
-
-  private processClick(e: MouseEvent) {
-    const rect = this.app.canvas.getBoundingClientRect()
-    const screenX = e.clientX - rect.left
-    const screenY = e.clientY - rect.top
-    const worldPos = this.camera.screenToWorld(screenX, screenY)
+  private processClick(e: PointerEvent) {
+    const worldPos = this.camera.screenToWorld(e.clientX, e.clientY)
+    if (!worldPos) return
 
     // Check if clicking on a world object
     const clickedObject = this.findWorldObjectAt(worldPos)
     if (clickedObject && !clickedObject.depleted) {
       // Walk to adjacent tile, then start action
-      const adjacentTile = this.findAdjacentWalkableTile(
-        worldToTile({ x: clickedObject.sprite.x, y: clickedObject.sprite.y })
-      )
+      const objPos = clickedObject.getPosition()
+      const adjacentTile = this.findAdjacentWalkableTile(worldToTile({ x: objPos.x, y: objPos.y }))
 
       if (adjacentTile) {
         const playerTile = worldToTile(this.player.position)
@@ -120,8 +159,8 @@ export class Game {
           this.player.setPath(worldPath, () => {
             // Callback when path complete - trigger action
             this.onWorldObjectClick?.(clickedObject.id, {
-              x: clickedObject.sprite.x,
-              y: clickedObject.sprite.y
+              x: objPos.x,
+              y: objPos.y
             })
           })
           this.onLocalPlayerMove?.(this.player.position, worldPath)
@@ -131,8 +170,8 @@ export class Game {
         ) {
           // Already adjacent
           this.onWorldObjectClick?.(clickedObject.id, {
-            x: clickedObject.sprite.x,
-            y: clickedObject.sprite.y
+            x: objPos.x,
+            y: objPos.y
           })
         }
       }
@@ -163,8 +202,9 @@ export class Game {
   private findWorldObjectAt(pos: Position): WorldObjectEntity | null {
     const clickRadius = TILE_SIZE / 2 + 8
     for (const obj of this.worldObjects.values()) {
-      const dx = pos.x - obj.sprite.x
-      const dy = pos.y - obj.sprite.y
+      const objPos = obj.getPosition()
+      const dx = pos.x - objPos.x
+      const dy = pos.y - objPos.y
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < clickRadius) {
         return obj
@@ -196,22 +236,24 @@ export class Game {
   }
 
   private handleResize = () => {
-    this.camera.resize(this.app.screen.width, this.app.screen.height)
+    this.engine.resize()
+    this.updateCameraOrtho()
+    const canvas = this.engine.getRenderingCanvas()!
+    this.camera.resize(canvas.width, canvas.height)
   }
 
   // World object management
   addWorldObject(id: string, objectType: WorldObjectType, x: number, y: number) {
     if (this.worldObjects.has(id)) return
 
-    const obj = new WorldObjectEntity(id, objectType, x, y)
+    const obj = new WorldObjectEntity(id, objectType, x, y, this.scene)
     this.worldObjects.set(id, obj)
-    this.objectsContainer.addChild(obj.sprite)
   }
 
   removeWorldObject(id: string) {
     const obj = this.worldObjects.get(id)
     if (obj) {
-      this.objectsContainer.removeChild(obj.sprite)
+      obj.dispose()
       this.worldObjects.delete(id)
     }
   }
@@ -235,16 +277,15 @@ export class Game {
   async addRemotePlayer(id: string, name: string, position: Position) {
     if (this.remotePlayers.has(id)) return
 
-    const remotePlayer = new RemotePlayer(position, name)
+    const remotePlayer = new RemotePlayer(position, name, this.scene)
     await remotePlayer.init()
     this.remotePlayers.set(id, remotePlayer)
-    this.entitiesContainer.addChild(remotePlayer.sprite)
   }
 
   removeRemotePlayer(id: string) {
     const remotePlayer = this.remotePlayers.get(id)
     if (remotePlayer) {
-      this.entitiesContainer.removeChild(remotePlayer.sprite)
+      remotePlayer.dispose()
       this.remotePlayers.delete(id)
     }
   }
@@ -262,8 +303,12 @@ export class Game {
   }
 
   start() {
-    this.app.ticker.add((ticker) => {
-      const delta = ticker.deltaTime
+    this.lastTime = performance.now()
+
+    this.engine.runRenderLoop(() => {
+      const currentTime = performance.now()
+      const delta = (currentTime - this.lastTime) / 16.67 // Normalize to 60fps
+      this.lastTime = currentTime
 
       this.player.update(delta)
 
@@ -273,18 +318,12 @@ export class Game {
 
       this.camera.follow(this.player.position)
 
-      this.worldContainer.x = -this.camera.x
-      this.worldContainer.y = -this.camera.y
-
-      // Sort entities by Y for depth
-      this.entitiesContainer.children.sort((a, b) => a.y - b.y)
+      this.scene.render()
     })
   }
 
   destroy() {
     window.removeEventListener('resize', this.handleResize)
-    this.app.canvas.removeEventListener('click', this.handleClick)
-    this.app.canvas.removeEventListener('contextmenu', this.handleContextMenu)
-    this.app.destroy(true, { children: true })
+    this.engine.dispose()
   }
 }

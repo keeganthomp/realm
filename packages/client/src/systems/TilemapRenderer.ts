@@ -1,39 +1,49 @@
-import { Container, Graphics } from 'pixi.js'
+import {
+  Scene,
+  MeshBuilder,
+  StandardMaterial,
+  DynamicTexture,
+  Color3,
+  Mesh
+} from '@babylonjs/core'
 import { TILE_SIZE, TileType, WALKABLE_TILES } from '@realm/shared'
 
-// Tile colors
-const TILE_COLORS: Record<TileType, number> = {
-  [TileType.GRASS]: 0x4a7c23,
-  [TileType.WATER]: 0x3d85c6,
-  [TileType.SAND]: 0xc9b458,
-  [TileType.STONE]: 0x808080,
-  [TileType.TREE]: 0x4a7c23, // Trees are now objects, show grass under them
-  [TileType.WALL]: 0x4a4a4a
+// Tile colors (RGB normalized 0-1)
+const TILE_COLORS: Record<TileType, { r: number; g: number; b: number }> = {
+  [TileType.GRASS]: { r: 0.29, g: 0.49, b: 0.14 }, // #4a7c23
+  [TileType.WATER]: { r: 0.24, g: 0.52, b: 0.78 }, // #3d85c6
+  [TileType.SAND]: { r: 0.79, g: 0.71, b: 0.35 }, // #c9b458
+  [TileType.STONE]: { r: 0.5, g: 0.5, b: 0.5 }, // #808080
+  [TileType.TREE]: { r: 0.29, g: 0.49, b: 0.14 }, // Trees show grass underneath
+  [TileType.WALL]: { r: 0.29, g: 0.29, b: 0.29 } // #4a4a4a
 }
 
 // Map dimensions in tiles
 const MAP_WIDTH = 40
 const MAP_HEIGHT = 30
 
+// Texture resolution multiplier (pixels per tile on texture)
+const TEXTURE_PIXELS_PER_TILE = 16
+
 export class TilemapRenderer {
-  public container: Container
   public worldWidth: number
   public worldHeight: number
 
+  private scene: Scene
   private tiles: TileType[][] = []
-  private tileGraphics: Graphics
+  private groundMesh!: Mesh
+  private texture!: DynamicTexture
 
-  constructor() {
-    this.container = new Container()
-    this.tileGraphics = new Graphics()
+  constructor(scene: Scene) {
+    this.scene = scene
     this.worldWidth = MAP_WIDTH * TILE_SIZE
     this.worldHeight = MAP_HEIGHT * TILE_SIZE
   }
 
   async init() {
     this.generateTestMap()
-    this.renderTiles()
-    this.container.addChild(this.tileGraphics)
+    this.createGroundMesh()
+    this.renderTilesToTexture()
   }
 
   private generateTestMap() {
@@ -112,41 +122,90 @@ export class TilemapRenderer {
     this.tiles[12][12] = TileType.STONE
   }
 
-  private renderTiles() {
-    this.tileGraphics.clear()
+  private createGroundMesh() {
+    // Ground size in 3D units (1 tile = 1 unit)
+    const groundWidth = MAP_WIDTH
+    const groundHeight = MAP_HEIGHT
+
+    // Create the ground plane
+    this.groundMesh = MeshBuilder.CreateGround(
+      'ground',
+      {
+        width: groundWidth,
+        height: groundHeight,
+        subdivisions: 1
+      },
+      this.scene
+    )
+
+    // Position ground so (0,0) tile corner is at world origin
+    // The ground mesh is centered, so we offset it
+    this.groundMesh.position.x = groundWidth / 2
+    this.groundMesh.position.z = groundHeight / 2
+
+    // Create dynamic texture
+    const textureWidth = MAP_WIDTH * TEXTURE_PIXELS_PER_TILE
+    const textureHeight = MAP_HEIGHT * TEXTURE_PIXELS_PER_TILE
+    this.texture = new DynamicTexture('groundTexture', { width: textureWidth, height: textureHeight }, this.scene, false)
+
+    // Create material with the texture
+    const groundMat = new StandardMaterial('groundMat', this.scene)
+    groundMat.diffuseTexture = this.texture
+    groundMat.specularColor = Color3.Black()
+    this.groundMesh.material = groundMat
+  }
+
+  private renderTilesToTexture() {
+    const ctx = this.texture.getContext()
+    const ppt = TEXTURE_PIXELS_PER_TILE // pixels per tile
 
     for (let y = 0; y < MAP_HEIGHT; y++) {
       for (let x = 0; x < MAP_WIDTH; x++) {
         const tileType = this.tiles[y][x]
         const color = TILE_COLORS[tileType]
 
-        const px = x * TILE_SIZE
-        const py = y * TILE_SIZE
+        // Convert to CSS color
+        const r = Math.floor(color.r * 255)
+        const g = Math.floor(color.g * 255)
+        const b = Math.floor(color.b * 255)
+
+        // Pixel position (flip Y for texture coords)
+        const px = x * ppt
+        const py = (MAP_HEIGHT - 1 - y) * ppt
 
         // Draw base tile
-        this.tileGraphics.rect(px, py, TILE_SIZE, TILE_SIZE)
-        this.tileGraphics.fill({ color })
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`
+        ctx.fillRect(px, py, ppt, ppt)
 
-        // Subtle grid
-        this.tileGraphics.rect(px, py, TILE_SIZE, TILE_SIZE)
-        this.tileGraphics.stroke({ color: 0x000000, alpha: 0.08, width: 1 })
+        // Subtle grid lines
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
+        ctx.lineWidth = 1
+        ctx.strokeRect(px, py, ppt, ppt)
 
         // Water detail
         if (tileType === TileType.WATER) {
-          this.tileGraphics.rect(px + 4, py + 8, 10, 2)
-          this.tileGraphics.rect(px + 18, py + 16, 10, 2)
-          this.tileGraphics.fill({ color: 0x5a9fd4 })
+          ctx.fillStyle = 'rgba(90, 159, 212, 0.5)' // #5a9fd4
+          ctx.fillRect(px + 2, py + 4, 5, 1)
+          ctx.fillRect(px + 9, py + 8, 5, 1)
         }
 
         // Stone detail
         if (tileType === TileType.STONE) {
-          this.tileGraphics.circle(px + 8, py + 12, 4)
-          this.tileGraphics.circle(px + 20, py + 8, 3)
-          this.tileGraphics.circle(px + 24, py + 20, 5)
-          this.tileGraphics.fill({ color: 0x6a6a6a })
+          ctx.fillStyle = 'rgba(106, 106, 106, 0.8)' // #6a6a6a
+          ctx.beginPath()
+          ctx.arc(px + 4, py + 6, 2, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.beginPath()
+          ctx.arc(px + 10, py + 4, 1.5, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.beginPath()
+          ctx.arc(px + 12, py + 10, 2.5, 0, Math.PI * 2)
+          ctx.fill()
         }
       }
     }
+
+    this.texture.update()
   }
 
   isWalkable(tileX: number, tileY: number): boolean {

@@ -1,105 +1,134 @@
-import { Container, Graphics, Text } from 'pixi.js'
-import { Direction, TILE_SIZE } from '@realm/shared'
+import {
+  Scene,
+  TransformNode,
+  MeshBuilder,
+  StandardMaterial,
+  Color3,
+  Vector3,
+  Mesh
+} from '@babylonjs/core'
+import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
+import { Direction } from '@realm/shared'
 import type { Position } from '@realm/shared'
 
 const INTERPOLATION_SPEED = 0.15
 
 export class RemotePlayer {
-  public sprite: Container
   public position: Position
   public direction: Direction = Direction.DOWN
 
+  private scene: Scene
+  private node: TransformNode
+  private body!: Mesh
+  private head!: Mesh
+  private leftLeg!: Mesh
+  private rightLeg!: Mesh
+
   private targetPosition: Position
-  private body: Graphics
-  private nameTag: Text
   private playerName: string
 
-  constructor(startPosition: Position, name: string) {
+  private guiTexture: AdvancedDynamicTexture | null = null
+  private nameLabel: TextBlock | null = null
+
+  constructor(startPosition: Position, name: string, scene: Scene) {
     this.position = { ...startPosition }
     this.targetPosition = { ...startPosition }
     this.playerName = name
-    this.sprite = new Container()
-    this.body = new Graphics()
-    this.nameTag = new Text({ text: '' })
+    this.scene = scene
+    this.node = new TransformNode('remotePlayer_' + name, scene)
   }
 
   async init() {
-    // Create a simple placeholder sprite (different color from local player)
-    this.body = new Graphics()
-    this.drawCharacter()
-    this.sprite.addChild(this.body)
-
-    // Add name tag above player
-    this.nameTag = new Text({
-      text: this.playerName,
-      style: {
-        fontFamily: 'Inter, sans-serif',
-        fontSize: 11,
-        fill: 0xffffff,
-        letterSpacing: 1
-      }
-    })
-    this.nameTag.anchor.set(0.5, 1)
-    this.nameTag.y = -TILE_SIZE / 2 - 4
-    this.sprite.addChild(this.nameTag)
-
-    this.updateSpritePosition()
+    this.createCharacterMeshes()
+    this.createNameLabel()
+    this.updateNodePosition()
   }
 
-  private drawCharacter() {
-    this.body.clear()
+  private createCharacterMeshes() {
+    const bodyColor = new Color3(0.42, 0.56, 0.14) // #6b8e23 Green tunic
+    const skinColor = new Color3(0.96, 0.82, 0.66) // #f5d0a9 Skin tone
+    const legColor = new Color3(0.24, 0.24, 0.24) // #3d3d3d Dark pants
 
-    // Shadow
-    this.body.ellipse(0, TILE_SIZE / 2 - 4, 10, 4)
-    this.body.fill({ color: 0x000000, alpha: 0.2 })
+    // Body material
+    const bodyMat = new StandardMaterial('remoteBodyMat_' + this.playerName, this.scene)
+    bodyMat.diffuseColor = bodyColor
+    bodyMat.specularColor = Color3.Black()
 
-    // Body (green tunic for remote players)
-    const bodyColor = 0x6b8e23
-    const skinColor = 0xf5d0a9
+    // Skin material
+    const skinMat = new StandardMaterial('remoteSkinMat_' + this.playerName, this.scene)
+    skinMat.diffuseColor = skinColor
+    skinMat.specularColor = Color3.Black()
 
-    // Legs
-    this.body.rect(-6, 4, 5, 12)
-    this.body.rect(1, 4, 5, 12)
-    this.body.fill({ color: 0x3d3d3d })
+    // Leg material
+    const legMat = new StandardMaterial('remoteLegMat_' + this.playerName, this.scene)
+    legMat.diffuseColor = legColor
+    legMat.specularColor = Color3.Black()
 
-    // Body/tunic
-    this.body.roundRect(-8, -8, 16, 14, 2)
-    this.body.fill({ color: bodyColor })
+    // Body (cylinder)
+    this.body = MeshBuilder.CreateCylinder(
+      'remoteBody_' + this.playerName,
+      { height: 0.5, diameter: 0.4, tessellation: 8 },
+      this.scene
+    )
+    this.body.material = bodyMat
+    this.body.position.y = 0.45
+    this.body.parent = this.node
 
-    // Head
-    this.body.circle(0, -14, 8)
-    this.body.fill({ color: skinColor })
+    // Head (sphere)
+    this.head = MeshBuilder.CreateSphere(
+      'remoteHead_' + this.playerName,
+      { diameter: 0.35, segments: 8 },
+      this.scene
+    )
+    this.head.material = skinMat
+    this.head.position.y = 0.85
+    this.head.parent = this.node
 
-    // Direction indicator (eyes/facing)
-    this.drawDirectionIndicator()
+    // Left leg (cylinder)
+    this.leftLeg = MeshBuilder.CreateCylinder(
+      'remoteLeftLeg_' + this.playerName,
+      { height: 0.25, diameter: 0.12, tessellation: 6 },
+      this.scene
+    )
+    this.leftLeg.material = legMat
+    this.leftLeg.position.set(-0.1, 0.125, 0)
+    this.leftLeg.parent = this.node
+
+    // Right leg (cylinder)
+    this.rightLeg = MeshBuilder.CreateCylinder(
+      'remoteRightLeg_' + this.playerName,
+      { height: 0.25, diameter: 0.12, tessellation: 6 },
+      this.scene
+    )
+    this.rightLeg.material = legMat
+    this.rightLeg.position.set(0.1, 0.125, 0)
+    this.rightLeg.parent = this.node
   }
 
-  private drawDirectionIndicator() {
-    const eyeColor = 0x2d2d2d
-    const eyeSize = 2
+  private createNameLabel() {
+    this.guiTexture = AdvancedDynamicTexture.CreateFullscreenUI(
+      'remotePlayerUI_' + this.playerName,
+      true,
+      this.scene
+    )
 
-    switch (this.direction) {
-      case Direction.DOWN:
-        this.body.circle(-3, -14, eyeSize)
-        this.body.circle(3, -14, eyeSize)
-        break
-      case Direction.UP:
-        break
-      case Direction.LEFT:
-        this.body.circle(-4, -14, eyeSize)
-        break
-      case Direction.RIGHT:
-        this.body.circle(4, -14, eyeSize)
-        break
-    }
-    this.body.fill({ color: eyeColor })
+    this.nameLabel = new TextBlock('remoteName_' + this.playerName, this.playerName)
+    this.nameLabel.color = 'white'
+    this.nameLabel.fontSize = 14
+    this.nameLabel.fontFamily = 'Inter, sans-serif'
+    this.nameLabel.outlineWidth = 2
+    this.nameLabel.outlineColor = 'black'
+
+    this.guiTexture.addControl(this.nameLabel)
+    this.nameLabel.linkWithMesh(this.node)
+    this.nameLabel.linkOffsetY = -60
   }
 
   setTargetPosition(position: Position, direction: Direction) {
     this.targetPosition = { ...position }
     if (direction !== this.direction) {
       this.direction = direction
-      this.drawCharacter()
+      this.updateFacing()
     }
   }
 
@@ -111,11 +140,38 @@ export class RemotePlayer {
     this.position.x += dx * INTERPOLATION_SPEED
     this.position.y += dy * INTERPOLATION_SPEED
 
-    this.updateSpritePosition()
+    this.updateNodePosition()
   }
 
-  private updateSpritePosition() {
-    this.sprite.x = this.position.x
-    this.sprite.y = this.position.y
+  private updateFacing() {
+    // Rotate character to face direction
+    switch (this.direction) {
+      case Direction.DOWN:
+        this.node.rotation.y = 0
+        break
+      case Direction.UP:
+        this.node.rotation.y = Math.PI
+        break
+      case Direction.LEFT:
+        this.node.rotation.y = Math.PI / 2
+        break
+      case Direction.RIGHT:
+        this.node.rotation.y = -Math.PI / 2
+        break
+    }
+  }
+
+  private updateNodePosition() {
+    // Map 2D position to 3D: x stays x, y becomes z
+    // Scale down from pixel coordinates to 3D world units
+    const scale = 1 / 32 // TILE_SIZE = 32, so 1 tile = 1 unit in 3D
+    this.node.position = new Vector3(this.position.x * scale, 0, this.position.y * scale)
+  }
+
+  dispose() {
+    this.node.dispose()
+    if (this.guiTexture) {
+      this.guiTexture.dispose()
+    }
   }
 }
