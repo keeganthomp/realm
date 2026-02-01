@@ -53,3 +53,18 @@ export const playerBank = pgTable(
     playerBankSlotUnique: unique().on(table.playerId, table.slot)
   })
 )
+
+export const playerEquipment = pgTable(
+  'player_equipment',
+  {
+    id: serial('id').primaryKey(),
+    playerId: integer('player_id')
+      .references(() => players.id, { onDelete: 'cascade' })
+      .notNull(),
+    slot: varchar('slot', { length: 20 }).notNull(),
+    itemType: varchar('item_type', { length: 50 }).notNull()
+  },
+  (table) => ({
+    playerSlotUnique: unique().on(table.playerId, table.slot)
+  })
+)

@@ -1,6 +1,6 @@
 import { Room, Client } from '@colyseus/core'
 import { WorldState } from '../schemas/WorldState'
-import { Player, SkillData, InventoryItem, CurrentAction } from '../schemas/Player'
+import { Player, SkillData, InventoryItem, CurrentAction, EquippedItem } from '../schemas/Player'
 import { WorldObject } from '../schemas/WorldObject'
 import { NPC } from '../schemas/NPC'
 import {
@@ -30,7 +30,14 @@ import {
   calculateMaxHp,
   CHUNK_SIZE,
   getChunkKey,
-  TILE_SIZE
+  TILE_SIZE,
+  EquipmentSlot,
+  isEquippable,
+  getEquipmentDefinition,
+  getEquipmentSlot,
+  isTwoHanded,
+  getEquipmentRequirements,
+  calculateTotalBonuses
 } from '@realm/shared'
 import type { ChunkData, ChunkKey } from '@realm/shared'
 import { WorldGenerator } from '../world/WorldGenerator'
@@ -38,7 +45,8 @@ import {
   getOrCreatePlayer,
   savePlayerSkills,
   savePlayerInventory,
-  savePlayerBank
+  savePlayerBank,
+  savePlayerEquipment
 } from '../database'
 import { SpatialHashGrid } from '../spatial/SpatialHashGrid'
 
@@ -187,6 +195,16 @@ export class WorldRoom extends Room {
       if (['accurate', 'aggressive', 'defensive'].includes(data.style)) {
         player.combatStyle = data.style
       }
+    })
+
+    // Handle equipping an item
+    this.onMessage('equipItem', (client, data: { inventoryIndex: number }) => {
+      this.handleEquipItem(client, data.inventoryIndex)
+    })
+
+    // Handle unequipping an item
+    this.onMessage('unequipItem', (client, data: { slot: string }) => {
+      this.handleUnequipItem(client, data.slot as EquipmentSlot)
     })
 
     // Client requests chunk resend (after handlers are ready)
@@ -422,7 +440,13 @@ export class WorldRoom extends Room {
       weapons_stall: {
         name: 'Weapons Stall',
         items: [
-          // Placeholder - add weapons when equipment system is ready
+          { itemType: ItemType.BRONZE_SWORD, price: 26, stock: 5 },
+          { itemType: ItemType.BRONZE_SHIELD, price: 32, stock: 5 },
+          { itemType: ItemType.BRONZE_HELMET, price: 24, stock: 5 },
+          { itemType: ItemType.BRONZE_CHESTPLATE, price: 80, stock: 3 },
+          { itemType: ItemType.BRONZE_LEGS, price: 52, stock: 3 },
+          { itemType: ItemType.IRON_SWORD, price: 91, stock: 3 },
+          { itemType: ItemType.IRON_SHIELD, price: 112, stock: 3 }
         ]
       },
       general_store: {
@@ -1273,15 +1297,18 @@ export class WorldRoom extends Room {
       const attackLevel = getLevelFromXp(attackXp)
       const strengthLevel = getLevelFromXp(strengthXp)
 
+      // Get equipment bonuses
+      const bonuses = this.getPlayerBonuses(player)
+
       const npcDef = NPC_DEFINITIONS[npc.npcType as NpcType]
       if (!npcDef) return
 
-      // Roll to hit
-      const didHit = calculateHitChance(attackLevel, strengthLevel, npcDef.defenceLevel)
+      // Roll to hit with equipment bonuses
+      const didHit = calculateHitChance(attackLevel, bonuses.attackBonus, npcDef.defenceLevel, 0)
 
       let damage = 0
       if (didHit) {
-        const maxHit = calculateMaxHit(strengthLevel)
+        const maxHit = calculateMaxHit(strengthLevel, bonuses.strengthBonus)
         damage = rollDamage(maxHit)
       }
 
@@ -1390,12 +1417,13 @@ export class WorldRoom extends Room {
       if (now - npc.lastAttackTime < COMBAT_TICK_MS * npcDef.attackSpeed) return
       npc.lastAttackTime = now
 
-      // Get player defence level
+      // Get player defence level and equipment bonus
       const defenceXp = player.skills.get(SkillType.DEFENCE)?.xp || 0
       const defenceLevel = getLevelFromXp(defenceXp)
+      const playerBonuses = this.getPlayerBonuses(player)
 
-      // Roll to hit
-      const didHit = calculateHitChance(npcDef.attackLevel, npcDef.strengthLevel, defenceLevel)
+      // Roll to hit with player's defence bonus
+      const didHit = calculateHitChance(npcDef.attackLevel, 0, defenceLevel, playerBonuses.defenceBonus)
 
       let damage = 0
       if (didHit) {
@@ -1542,6 +1570,255 @@ export class WorldRoom extends Room {
     })
   }
 
+  private handleEquipItem(client: Client, inventoryIndex: number) {
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+
+    // Validate inventory index
+    if (inventoryIndex < 0 || inventoryIndex >= player.inventory.length) {
+      client.send('actionError', { message: 'Invalid item' })
+      return
+    }
+
+    const item = player.inventory[inventoryIndex]
+    const itemType = item.itemType as ItemType
+
+    // Check if item is equippable
+    if (!isEquippable(itemType)) {
+      client.send('actionError', { message: 'Cannot equip that item' })
+      return
+    }
+
+    const equipDef = getEquipmentDefinition(itemType)
+    if (!equipDef) return
+
+    // Check requirements
+    const requirements = getEquipmentRequirements(itemType)
+    if (requirements) {
+      if (requirements.attack) {
+        const attackXp = player.skills.get(SkillType.ATTACK)?.xp || 0
+        const attackLevel = getLevelFromXp(attackXp)
+        if (attackLevel < requirements.attack) {
+          client.send('actionError', { message: `Need level ${requirements.attack} Attack` })
+          return
+        }
+      }
+      if (requirements.defence) {
+        const defenceXp = player.skills.get(SkillType.DEFENCE)?.xp || 0
+        const defenceLevel = getLevelFromXp(defenceXp)
+        if (defenceLevel < requirements.defence) {
+          client.send('actionError', { message: `Need level ${requirements.defence} Defence` })
+          return
+        }
+      }
+      if (requirements.strength) {
+        const strengthXp = player.skills.get(SkillType.STRENGTH)?.xp || 0
+        const strengthLevel = getLevelFromXp(strengthXp)
+        if (strengthLevel < requirements.strength) {
+          client.send('actionError', { message: `Need level ${requirements.strength} Strength` })
+          return
+        }
+      }
+    }
+
+    const slot = getEquipmentSlot(itemType)
+    if (!slot) return
+
+    // Handle two-handed weapons
+    if (isTwoHanded(itemType)) {
+      // Need to unequip offhand if there's something there
+      if (player.equipOffhand) {
+        // Check inventory space for offhand item
+        if (player.inventory.length >= MAX_INVENTORY_SIZE) {
+          client.send('actionError', { message: 'Inventory full' })
+          return
+        }
+        // Move offhand to inventory
+        const offhandItem = new InventoryItem()
+        offhandItem.itemType = player.equipOffhand.itemType
+        offhandItem.quantity = 1
+        player.inventory.push(offhandItem)
+        player.equipOffhand = null
+      }
+    }
+
+    // If equipping offhand while holding 2H weapon, unequip weapon
+    if (slot === EquipmentSlot.OFFHAND && player.equipWeapon) {
+      if (isTwoHanded(player.equipWeapon.itemType as ItemType)) {
+        // Check inventory space for weapon
+        if (player.inventory.length >= MAX_INVENTORY_SIZE) {
+          client.send('actionError', { message: 'Inventory full' })
+          return
+        }
+        // Move weapon to inventory
+        const weaponItem = new InventoryItem()
+        weaponItem.itemType = player.equipWeapon.itemType
+        weaponItem.quantity = 1
+        player.inventory.push(weaponItem)
+        player.equipWeapon = null
+      }
+    }
+
+    // Get current item in slot (if any)
+    const currentEquipped = this.getEquippedItem(player, slot)
+
+    // Remove item from inventory
+    player.inventory.splice(inventoryIndex, 1)
+
+    // If there was already an item equipped, put it in inventory
+    if (currentEquipped) {
+      const unequippedItem = new InventoryItem()
+      unequippedItem.itemType = currentEquipped.itemType
+      unequippedItem.quantity = 1
+      player.inventory.push(unequippedItem)
+    }
+
+    // Equip the new item
+    const equippedItem = new EquippedItem()
+    equippedItem.itemType = itemType
+    this.setEquippedItem(player, slot, equippedItem)
+
+    // Mark bonuses as dirty
+    player.bonusesDirty = true
+
+    // Mark for save
+    this.pendingSaves.add(client.sessionId)
+
+    // Send updated state
+    this.sendStateUpdate(client.sessionId)
+    this.sendEquipmentUpdate(client.sessionId)
+  }
+
+  private handleUnequipItem(client: Client, slot: EquipmentSlot) {
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+
+    const equippedItem = this.getEquippedItem(player, slot)
+    if (!equippedItem) {
+      client.send('actionError', { message: 'Nothing equipped in that slot' })
+      return
+    }
+
+    // Check inventory space
+    if (player.inventory.length >= MAX_INVENTORY_SIZE) {
+      client.send('actionError', { message: 'Inventory full' })
+      return
+    }
+
+    // Remove from equipment slot
+    this.setEquippedItem(player, slot, null)
+
+    // Add to inventory
+    const inventoryItem = new InventoryItem()
+    inventoryItem.itemType = equippedItem.itemType
+    inventoryItem.quantity = 1
+    player.inventory.push(inventoryItem)
+
+    // Mark bonuses as dirty
+    player.bonusesDirty = true
+
+    // Mark for save
+    this.pendingSaves.add(client.sessionId)
+
+    // Send updated state
+    this.sendStateUpdate(client.sessionId)
+    this.sendEquipmentUpdate(client.sessionId)
+  }
+
+  private getEquippedItem(player: Player, slot: EquipmentSlot): EquippedItem | null {
+    switch (slot) {
+      case EquipmentSlot.HEAD:
+        return player.equipHead
+      case EquipmentSlot.BODY:
+        return player.equipBody
+      case EquipmentSlot.LEGS:
+        return player.equipLegs
+      case EquipmentSlot.FEET:
+        return player.equipFeet
+      case EquipmentSlot.HANDS:
+        return player.equipHands
+      case EquipmentSlot.WEAPON:
+        return player.equipWeapon
+      case EquipmentSlot.OFFHAND:
+        return player.equipOffhand
+      default:
+        return null
+    }
+  }
+
+  private setEquippedItem(player: Player, slot: EquipmentSlot, item: EquippedItem | null) {
+    switch (slot) {
+      case EquipmentSlot.HEAD:
+        player.equipHead = item
+        break
+      case EquipmentSlot.BODY:
+        player.equipBody = item
+        break
+      case EquipmentSlot.LEGS:
+        player.equipLegs = item
+        break
+      case EquipmentSlot.FEET:
+        player.equipFeet = item
+        break
+      case EquipmentSlot.HANDS:
+        player.equipHands = item
+        break
+      case EquipmentSlot.WEAPON:
+        player.equipWeapon = item
+        break
+      case EquipmentSlot.OFFHAND:
+        player.equipOffhand = item
+        break
+    }
+  }
+
+  private getPlayerEquipmentMap(player: Player): Partial<Record<EquipmentSlot, ItemType | null>> {
+    return {
+      [EquipmentSlot.HEAD]: player.equipHead?.itemType as ItemType | null ?? null,
+      [EquipmentSlot.BODY]: player.equipBody?.itemType as ItemType | null ?? null,
+      [EquipmentSlot.LEGS]: player.equipLegs?.itemType as ItemType | null ?? null,
+      [EquipmentSlot.FEET]: player.equipFeet?.itemType as ItemType | null ?? null,
+      [EquipmentSlot.HANDS]: player.equipHands?.itemType as ItemType | null ?? null,
+      [EquipmentSlot.WEAPON]: player.equipWeapon?.itemType as ItemType | null ?? null,
+      [EquipmentSlot.OFFHAND]: player.equipOffhand?.itemType as ItemType | null ?? null
+    }
+  }
+
+  private getPlayerBonuses(player: Player): { attackBonus: number; strengthBonus: number; defenceBonus: number } {
+    if (player.bonusesDirty) {
+      const equipment = this.getPlayerEquipmentMap(player)
+      const bonuses = calculateTotalBonuses(equipment)
+      player.cachedAttackBonus = bonuses.attackBonus
+      player.cachedStrengthBonus = bonuses.strengthBonus
+      player.cachedDefenceBonus = bonuses.defenceBonus
+      player.bonusesDirty = false
+    }
+    return {
+      attackBonus: player.cachedAttackBonus,
+      strengthBonus: player.cachedStrengthBonus,
+      defenceBonus: player.cachedDefenceBonus
+    }
+  }
+
+  private sendEquipmentUpdate(sessionId: string) {
+    const player = this.state.players.get(sessionId)
+    const client = this.clients.find((c) => c.sessionId === sessionId)
+    if (!player || !client) return
+
+    const equipment: Record<string, string | null> = {}
+    for (const slot of Object.values(EquipmentSlot)) {
+      const item = this.getEquippedItem(player, slot)
+      equipment[slot] = item?.itemType ?? null
+    }
+
+    const bonuses = this.getPlayerBonuses(player)
+
+    client.send('equipmentUpdate', {
+      equipment,
+      bonuses
+    })
+  }
+
   private async savePlayerData(sessionId: string) {
     const player = this.state.players.get(sessionId)
     const playerId = this.playerDbIds.get(sessionId)
@@ -1565,6 +1842,14 @@ export class WorldRoom extends Room {
       // Save bank
       const bank = this.playerBanks.get(sessionId) || []
       await savePlayerBank(playerId, bank)
+
+      // Save equipment
+      const equipment: Record<string, string | null> = {}
+      for (const slot of Object.values(EquipmentSlot)) {
+        const item = this.getEquippedItem(player, slot)
+        equipment[slot] = item?.itemType ?? null
+      }
+      await savePlayerEquipment(playerId, equipment)
 
       this.pendingSaves.delete(sessionId)
     } catch (error) {
@@ -1710,6 +1995,19 @@ export class WorldRoom extends Room {
         console.log('Loaded player bank from DB for:', username)
       }
 
+      // Load equipment from database
+      if (playerData.equipment && Object.keys(playerData.equipment).length > 0) {
+        for (const [slot, itemType] of Object.entries(playerData.equipment)) {
+          if (itemType) {
+            const equippedItem = new EquippedItem()
+            equippedItem.itemType = itemType
+            this.setEquippedItem(player, slot as EquipmentSlot, equippedItem)
+          }
+        }
+        player.bonusesDirty = true
+        console.log('Loaded player equipment from DB for:', username)
+      }
+
       // Update HP based on hitpoints level from DB
       const hitpointsXp = player.skills.get(SkillType.HITPOINTS)?.xp || 0
       const hitpointsLevel = getLevelFromXp(hitpointsXp)
@@ -1740,6 +2038,10 @@ export class WorldRoom extends Room {
           currentHp: player.currentHp,
           maxHp: player.maxHp
         })
+
+        // Send equipment update
+        this.sendEquipmentUpdate(sessionId)
+
         console.log('Sent playerData message to client for:', username)
       }
     } catch (error) {

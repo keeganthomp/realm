@@ -1,8 +1,8 @@
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq, and } from 'drizzle-orm'
 import { Pool } from 'pg'
-import { players, playerSkills, playerInventory, playerBank } from './schema'
-import { getInitialSkills } from '@realm/shared'
+import { players, playerSkills, playerInventory, playerBank, playerEquipment } from './schema'
+import { getInitialSkills, EquipmentSlot, ItemType } from '@realm/shared'
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
@@ -60,6 +60,16 @@ export async function initDatabase() {
       )
     `)
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS player_equipment (
+        id SERIAL PRIMARY KEY,
+        player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+        slot VARCHAR(20) NOT NULL,
+        item_type VARCHAR(50) NOT NULL,
+        UNIQUE(player_id, slot)
+      )
+    `)
+
     console.log('Database tables initialized')
   } finally {
     client.release()
@@ -72,6 +82,7 @@ export interface PlayerData {
   skills: Record<string, number>
   inventory: Array<{ itemType: string; quantity: number }>
   bank: Array<{ itemType: string; quantity: number }>
+  equipment: Record<string, string>
 }
 
 export async function getOrCreatePlayer(username: string): Promise<PlayerData> {
@@ -91,6 +102,20 @@ export async function getOrCreatePlayer(username: string): Promise<PlayerData> {
       xp
     }))
     await db.insert(playerSkills).values(skillInserts)
+
+    // Give starter equipment
+    const starterEquipment = [
+      { slot: EquipmentSlot.WEAPON, itemType: ItemType.BRONZE_SWORD },
+      { slot: EquipmentSlot.OFFHAND, itemType: ItemType.WOODEN_SHIELD },
+      { slot: EquipmentSlot.BODY, itemType: ItemType.LEATHER_BODY }
+    ]
+    await db.insert(playerEquipment).values(
+      starterEquipment.map(({ slot, itemType }) => ({
+        playerId: player.id,
+        slot,
+        itemType
+      }))
+    )
 
     console.log(`Created new player: ${username}`)
   } else {
@@ -129,12 +154,24 @@ export async function getOrCreatePlayer(username: string): Promise<PlayerData> {
     quantity: row.quantity
   }))
 
+  // Load equipment
+  const equipmentRows = await db
+    .select()
+    .from(playerEquipment)
+    .where(eq(playerEquipment.playerId, player.id))
+
+  const equipment: Record<string, string> = {}
+  for (const row of equipmentRows) {
+    equipment[row.slot] = row.itemType
+  }
+
   return {
     id: player.id,
     username,
     skills,
     inventory,
-    bank
+    bank,
+    equipment
   }
 }
 
@@ -189,6 +226,40 @@ export async function savePlayerBank(
       quantity: item.quantity
     }))
     await db.insert(playerBank).values(bankInserts)
+  }
+}
+
+export async function loadPlayerEquipment(playerId: number): Promise<Record<string, string>> {
+  const rows = await db
+    .select()
+    .from(playerEquipment)
+    .where(eq(playerEquipment.playerId, playerId))
+
+  const equipment: Record<string, string> = {}
+  for (const row of rows) {
+    equipment[row.slot] = row.itemType
+  }
+  return equipment
+}
+
+export async function savePlayerEquipment(
+  playerId: number,
+  equipment: Record<string, string | null>
+) {
+  // Clear existing equipment
+  await db.delete(playerEquipment).where(eq(playerEquipment.playerId, playerId))
+
+  // Insert current equipment
+  const equipmentInserts = Object.entries(equipment)
+    .filter(([_, itemType]) => itemType !== null)
+    .map(([slot, itemType]) => ({
+      playerId,
+      slot,
+      itemType: itemType as string
+    }))
+
+  if (equipmentInserts.length > 0) {
+    await db.insert(playerEquipment).values(equipmentInserts)
   }
 }
 

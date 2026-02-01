@@ -38,6 +38,7 @@ export default [
         fetch: 'readonly',
         HTMLDivElement: 'readonly',
         HTMLCanvasElement: 'readonly',
+        HTMLElement: 'readonly',
         MouseEvent: 'readonly',
         KeyboardEvent: 'readonly',
         Event: 'readonly',

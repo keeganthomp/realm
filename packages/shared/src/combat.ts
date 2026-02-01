@@ -49,23 +49,33 @@ export function calculateCombatLevelFromXp(skills: Record<string, number>): numb
 // Returns true if the attack lands
 export function calculateHitChance(
   attackLevel: number,
-  attackerStrengthLevel: number,
-  defenderDefenceLevel: number
+  attackBonus: number,
+  defenderDefenceLevel: number,
+  defenderDefenceBonus: number = 0
 ): boolean {
-  // Attack roll = attackLevel + random(0, attackLevel)
-  const attackRoll = attackLevel + Math.floor(Math.random() * (attackLevel + 1))
+  // Effective attack = level + bonus
+  const effectiveAttack = attackLevel + attackBonus
 
-  // Defence roll = defenceLevel + random(0, defenceLevel)
-  const defenceRoll = defenderDefenceLevel + Math.floor(Math.random() * (defenderDefenceLevel + 1))
+  // Attack roll = effectiveAttack + random(0, effectiveAttack)
+  const attackRoll = effectiveAttack + Math.floor(Math.random() * (effectiveAttack + 1))
+
+  // Effective defence = level + bonus
+  const effectiveDefence = defenderDefenceLevel + defenderDefenceBonus
+
+  // Defence roll = effectiveDefence + random(0, effectiveDefence)
+  const defenceRoll = effectiveDefence + Math.floor(Math.random() * (effectiveDefence + 1))
 
   // Hit if attack roll > defence roll
   return attackRoll > defenceRoll
 }
 
-// Calculate max hit based on strength level
-export function calculateMaxHit(strengthLevel: number): number {
-  // Simplified formula: base 1 + floor(strengthLevel / 10)
-  return 1 + Math.floor(strengthLevel / 10)
+// Calculate max hit based on strength level and equipment bonus
+// OSRS-style formula: effectiveStrength * (strengthBonus + 64) / 640
+export function calculateMaxHit(strengthLevel: number, strengthBonus: number = 0): number {
+  const effectiveStrength = strengthLevel + 8
+  const maxHit = Math.floor(0.5 + (effectiveStrength * (strengthBonus + 64)) / 640)
+  // Minimum max hit of 1
+  return Math.max(1, maxHit)
 }
 
 // Roll damage (0 to maxHit inclusive)

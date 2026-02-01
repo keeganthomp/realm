@@ -49,7 +49,33 @@ export enum ItemType {
   // Metal bars (smelted)
   BRONZE_BAR = 'bronze_bar',
   IRON_BAR = 'iron_bar',
-  STEEL_BAR = 'steel_bar'
+  STEEL_BAR = 'steel_bar',
+
+  // Equipment - Bronze tier
+  BRONZE_SWORD = 'bronze_sword',
+  BRONZE_SHIELD = 'bronze_shield',
+  BRONZE_HELMET = 'bronze_helmet',
+  BRONZE_CHESTPLATE = 'bronze_chestplate',
+  BRONZE_LEGS = 'bronze_legs',
+
+  // Equipment - Iron tier
+  IRON_SWORD = 'iron_sword',
+  IRON_SHIELD = 'iron_shield',
+  IRON_HELMET = 'iron_helmet',
+  IRON_CHESTPLATE = 'iron_chestplate',
+  IRON_LEGS = 'iron_legs',
+
+  // Equipment - Steel tier
+  STEEL_SWORD = 'steel_sword',
+  STEEL_2H_SWORD = 'steel_2h_sword',
+  STEEL_SHIELD = 'steel_shield',
+  STEEL_HELMET = 'steel_helmet',
+  STEEL_CHESTPLATE = 'steel_chestplate',
+  STEEL_LEGS = 'steel_legs',
+
+  // Basic equipment (no requirements)
+  WOODEN_SHIELD = 'wooden_shield',
+  LEATHER_BODY = 'leather_body'
 }
 
 export interface ItemDefinition {
@@ -277,6 +303,140 @@ export const ITEM_DEFINITIONS: Record<ItemType, ItemDefinition> = {
     description: 'Used to smith steel items',
     stackable: false,
     value: 150
+  },
+
+  // Equipment - Bronze tier
+  [ItemType.BRONZE_SWORD]: {
+    type: ItemType.BRONZE_SWORD,
+    name: 'Bronze Sword',
+    description: 'A basic bronze sword',
+    stackable: false,
+    value: 26
+  },
+  [ItemType.BRONZE_SHIELD]: {
+    type: ItemType.BRONZE_SHIELD,
+    name: 'Bronze Shield',
+    description: 'A basic bronze shield',
+    stackable: false,
+    value: 32
+  },
+  [ItemType.BRONZE_HELMET]: {
+    type: ItemType.BRONZE_HELMET,
+    name: 'Bronze Helmet',
+    description: 'A basic bronze helmet',
+    stackable: false,
+    value: 24
+  },
+  [ItemType.BRONZE_CHESTPLATE]: {
+    type: ItemType.BRONZE_CHESTPLATE,
+    name: 'Bronze Chestplate',
+    description: 'A basic bronze chestplate',
+    stackable: false,
+    value: 80
+  },
+  [ItemType.BRONZE_LEGS]: {
+    type: ItemType.BRONZE_LEGS,
+    name: 'Bronze Platelegs',
+    description: 'Basic bronze leg armor',
+    stackable: false,
+    value: 52
+  },
+
+  // Equipment - Iron tier
+  [ItemType.IRON_SWORD]: {
+    type: ItemType.IRON_SWORD,
+    name: 'Iron Sword',
+    description: 'A sturdy iron sword',
+    stackable: false,
+    value: 91
+  },
+  [ItemType.IRON_SHIELD]: {
+    type: ItemType.IRON_SHIELD,
+    name: 'Iron Shield',
+    description: 'A sturdy iron shield',
+    stackable: false,
+    value: 112
+  },
+  [ItemType.IRON_HELMET]: {
+    type: ItemType.IRON_HELMET,
+    name: 'Iron Helmet',
+    description: 'A sturdy iron helmet',
+    stackable: false,
+    value: 84
+  },
+  [ItemType.IRON_CHESTPLATE]: {
+    type: ItemType.IRON_CHESTPLATE,
+    name: 'Iron Chestplate',
+    description: 'A sturdy iron chestplate',
+    stackable: false,
+    value: 280
+  },
+  [ItemType.IRON_LEGS]: {
+    type: ItemType.IRON_LEGS,
+    name: 'Iron Platelegs',
+    description: 'Sturdy iron leg armor',
+    stackable: false,
+    value: 182
+  },
+
+  // Equipment - Steel tier
+  [ItemType.STEEL_SWORD]: {
+    type: ItemType.STEEL_SWORD,
+    name: 'Steel Sword',
+    description: 'A strong steel sword',
+    stackable: false,
+    value: 325
+  },
+  [ItemType.STEEL_2H_SWORD]: {
+    type: ItemType.STEEL_2H_SWORD,
+    name: 'Steel 2H Sword',
+    description: 'A powerful two-handed steel sword',
+    stackable: false,
+    value: 650
+  },
+  [ItemType.STEEL_SHIELD]: {
+    type: ItemType.STEEL_SHIELD,
+    name: 'Steel Shield',
+    description: 'A strong steel shield',
+    stackable: false,
+    value: 400
+  },
+  [ItemType.STEEL_HELMET]: {
+    type: ItemType.STEEL_HELMET,
+    name: 'Steel Helmet',
+    description: 'A strong steel helmet',
+    stackable: false,
+    value: 300
+  },
+  [ItemType.STEEL_CHESTPLATE]: {
+    type: ItemType.STEEL_CHESTPLATE,
+    name: 'Steel Chestplate',
+    description: 'A strong steel chestplate',
+    stackable: false,
+    value: 1000
+  },
+  [ItemType.STEEL_LEGS]: {
+    type: ItemType.STEEL_LEGS,
+    name: 'Steel Platelegs',
+    description: 'Strong steel leg armor',
+    stackable: false,
+    value: 650
+  },
+
+  // Basic equipment (no requirements)
+  [ItemType.WOODEN_SHIELD]: {
+    type: ItemType.WOODEN_SHIELD,
+    name: 'Wooden Shield',
+    description: 'A simple wooden shield',
+    stackable: false,
+    value: 10
+  },
+  [ItemType.LEATHER_BODY]: {
+    type: ItemType.LEATHER_BODY,
+    name: 'Leather Body',
+    description: 'Basic leather armor',
+    stackable: false,
+    value: 20
   }
 }
 

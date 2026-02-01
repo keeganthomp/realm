@@ -50,6 +50,12 @@ export class NetworkManager {
   // Callback for when an NPC is clicked
   public onNpcClicked?: (npcId: string) => void
 
+  // Equipment callbacks
+  public onEquipmentChanged?: (
+    equipment: Record<string, string | null>,
+    bonuses: { attackBonus: number; strengthBonus: number; defenceBonus: number }
+  ) => void
+
   // Dialog/examine callbacks
   public onExamineResult?: (name: string, text: string, isReadable: boolean) => void
 
@@ -300,6 +306,17 @@ export class NetworkManager {
     this.room.onMessage('shopError', (data: { message: string }) => {
       this.onShopError?.(data.message)
     })
+
+    // Equipment update
+    this.room.onMessage(
+      'equipmentUpdate',
+      (data: {
+        equipment: Record<string, string | null>
+        bonuses: { attackBonus: number; strengthBonus: number; defenceBonus: number }
+      }) => {
+        this.onEquipmentChanged?.(data.equipment, data.bonuses)
+      }
+    )
 
     // Level up
     this.room.onMessage(
@@ -593,6 +610,16 @@ export class NetworkManager {
   setCombatStyle(style: string) {
     if (!this.room) return
     this.room.send('setCombatStyle', { style })
+  }
+
+  equipItem(inventoryIndex: number) {
+    if (!this.room) return
+    this.room.send('equipItem', { inventoryIndex })
+  }
+
+  unequipItem(slot: string) {
+    if (!this.room) return
+    this.room.send('unequipItem', { slot })
   }
 
   shopBuy(shopId: string, itemType: string, quantity: number) {

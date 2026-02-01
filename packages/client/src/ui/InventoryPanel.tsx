@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { ItemType, ITEM_DEFINITIONS, isFood } from '@realm/shared'
+import { ItemType, ITEM_DEFINITIONS, isFood, isEquippable } from '@realm/shared'
 
 interface InventoryPanelProps {
   items: Array<{ itemType: string; quantity: number }>
@@ -8,6 +8,7 @@ interface InventoryPanelProps {
   onSelectItem: (index: number | null) => void
   onDropItem: (index: number) => void
   onEatFood?: (index: number) => void
+  onEquipItem?: (index: number) => void
 }
 
 const MAX_SLOTS = 28
@@ -53,7 +54,8 @@ export function InventoryPanel({
   selectedIndex,
   onSelectItem,
   onDropItem,
-  onEatFood
+  onEatFood,
+  onEquipItem
 }: InventoryPanelProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(
     null
@@ -125,6 +127,13 @@ export function InventoryPanel({
       setContextMenu(null)
     }
   }, [contextMenu, onEatFood])
+
+  const handleEquip = useCallback(() => {
+    if (contextMenu !== null && onEquipItem) {
+      onEquipItem(contextMenu.index)
+      setContextMenu(null)
+    }
+  }, [contextMenu, onEquipItem])
 
   return (
     <div
@@ -281,6 +290,34 @@ export function InventoryPanel({
                 Eat
               </button>
             )}
+          {/* Equip option - only show for equippable items */}
+          {items[contextMenu.index] &&
+            isEquippable(items[contextMenu.index].itemType as ItemType) && (
+              <button
+                onClick={handleEquip}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '10px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#60a5fa',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.1s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(96, 165, 250, 0.15)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                Equip
+              </button>
+            )}
           <button
             onClick={handleDrop}
             style={{
@@ -341,7 +378,29 @@ function getItemIcon(itemType: string): string {
     [ItemType.RAW_CHICKEN]: '🍗',
     [ItemType.RAW_BEEF]: '🥩',
     [ItemType.COOKED_CHICKEN]: '🍗',
-    [ItemType.COOKED_BEEF]: '🥩'
+    [ItemType.COOKED_BEEF]: '🥩',
+    // Equipment
+    [ItemType.BRONZE_SWORD]: '🗡️',
+    [ItemType.BRONZE_SHIELD]: '🛡️',
+    [ItemType.BRONZE_HELMET]: '⛑️',
+    [ItemType.BRONZE_CHESTPLATE]: '🦺',
+    [ItemType.BRONZE_LEGS]: '👖',
+    [ItemType.IRON_SWORD]: '🗡️',
+    [ItemType.IRON_SHIELD]: '🛡️',
+    [ItemType.IRON_HELMET]: '⛑️',
+    [ItemType.IRON_CHESTPLATE]: '🦺',
+    [ItemType.IRON_LEGS]: '👖',
+    [ItemType.STEEL_SWORD]: '🗡️',
+    [ItemType.STEEL_2H_SWORD]: '⚔️',
+    [ItemType.STEEL_SHIELD]: '🛡️',
+    [ItemType.STEEL_HELMET]: '⛑️',
+    [ItemType.STEEL_CHESTPLATE]: '🦺',
+    [ItemType.STEEL_LEGS]: '👖',
+    [ItemType.WOODEN_SHIELD]: '🛡️',
+    [ItemType.LEATHER_BODY]: '🥋'
   }
   return icons[itemType] || '📦'
 }
+
+// Export for use in EquipmentPanel
+export { getItemIcon }

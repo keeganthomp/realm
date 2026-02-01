@@ -6,6 +6,7 @@ import { PlayerList } from './ui/PlayerList'
 import { ConnectionStatus } from './ui/ConnectionStatus'
 import { SkillsPanel } from './ui/SkillsPanel'
 import { InventoryPanel } from './ui/InventoryPanel'
+import { EquipmentPanel } from './ui/EquipmentPanel'
 import { BankPanel } from './ui/BankPanel'
 import { DialogPanel } from './ui/DialogPanel'
 import { ShopPanel } from './ui/ShopPanel'
@@ -56,6 +57,14 @@ export function App() {
 
   // Sidebar panel state - null means no panel open
   const [activePanel, setActivePanel] = useState<PanelType>(null)
+
+  // Equipment state
+  const [equipment, setEquipment] = useState<Record<string, string | null>>({})
+  const [equipmentBonuses, setEquipmentBonuses] = useState<{
+    attackBonus: number
+    strengthBonus: number
+    defenceBonus: number
+  }>({ attackBonus: 0, strengthBonus: 0, defenceBonus: 0 })
 
   // Store selected item index in ref for use in callbacks
   const selectedItemIndexRef = useRef<number | null>(null)
@@ -267,6 +276,12 @@ export function App() {
         showErrorRef.current(message)
       }
 
+      // Equipment
+      network.onEquipmentChanged = (equip, bonuses) => {
+        setEquipment({ ...equip })
+        setEquipmentBonuses({ ...bonuses })
+      }
+
       // Connect to server
       await network.connect()
 
@@ -330,6 +345,14 @@ export function App() {
     }
   }, [shop])
 
+  const handleEquipItem = useCallback((index: number) => {
+    networkRef.current?.equipItem(index)
+  }, [])
+
+  const handleUnequipItem = useCallback((slot: string) => {
+    networkRef.current?.unequipItem(slot)
+  }, [])
+
   // Calculate player coins for shop
   const playerCoins = inventory.reduce((total, item) => {
     if (item.itemType === ItemType.COINS) {
@@ -365,7 +388,7 @@ export function App() {
           {/* Top left - Player list */}
           <PlayerList players={players} />
 
-          {/* Right side - Sidebar with Skills and Inventory panels */}
+          {/* Right side - Sidebar with Skills, Inventory, and Equipment panels */}
           <Sidebar activePanel={activePanel} onPanelChange={setActivePanel}>
             {activePanel === 'skills' && <SkillsPanel skills={skills} />}
             {activePanel === 'inventory' && (
@@ -375,6 +398,14 @@ export function App() {
                 onSelectItem={handleSelectItem}
                 onDropItem={handleDropItem}
                 onEatFood={handleEatFood}
+                onEquipItem={handleEquipItem}
+              />
+            )}
+            {activePanel === 'equipment' && (
+              <EquipmentPanel
+                equipment={equipment}
+                bonuses={equipmentBonuses}
+                onUnequipItem={handleUnequipItem}
               />
             )}
           </Sidebar>

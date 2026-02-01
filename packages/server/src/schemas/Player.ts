@@ -4,6 +4,10 @@ export class SkillData extends Schema {
   @type('number') xp: number = 0
 }
 
+export class EquippedItem extends Schema {
+  @type('string') itemType: string = ''
+}
+
 export class InventoryItem extends Schema {
   @type('string') itemType: string = ''
   @type('number') quantity: number = 1
@@ -37,4 +41,19 @@ export class Player extends Schema {
   @type('string') combatTargetId: string = '' // NPC id being attacked
   @type('number') lastAttackTime: number = 0
   @type('string') combatStyle: string = 'aggressive' // accurate, aggressive, defensive
+
+  // Equipment slots (null = empty)
+  @type(EquippedItem) equipHead: EquippedItem | null = null
+  @type(EquippedItem) equipBody: EquippedItem | null = null
+  @type(EquippedItem) equipLegs: EquippedItem | null = null
+  @type(EquippedItem) equipFeet: EquippedItem | null = null
+  @type(EquippedItem) equipHands: EquippedItem | null = null
+  @type(EquippedItem) equipWeapon: EquippedItem | null = null
+  @type(EquippedItem) equipOffhand: EquippedItem | null = null
+
+  // Cached bonuses (not synced - server only)
+  cachedAttackBonus: number = 0
+  cachedStrengthBonus: number = 0
+  cachedDefenceBonus: number = 0
+  bonusesDirty: boolean = true
 }

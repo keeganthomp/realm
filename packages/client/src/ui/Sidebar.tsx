@@ -1,6 +1,6 @@
 import { useState, useCallback, ReactNode } from 'react'
 
-export type PanelType = 'skills' | 'inventory' | null
+export type PanelType = 'skills' | 'inventory' | 'equipment' | null
 
 interface SidebarProps {
   activePanel: PanelType
@@ -98,9 +98,18 @@ const InventoryIcon = () => (
   </svg>
 )
 
+const EquipmentIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#d4a84b' }}>
+    <path d="M14.5 17.5L3 6V3h3l11.5 11.5" />
+    <path d="M13 19l6-6" />
+    <path d="M16 16l4 4" />
+    <path d="M19 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+  </svg>
+)
+
 export function Sidebar({ activePanel, onPanelChange, children }: SidebarProps) {
   const handleButtonClick = useCallback(
-    (panel: 'skills' | 'inventory') => {
+    (panel: 'skills' | 'inventory' | 'equipment') => {
       // Toggle: if clicking the active panel, close it; otherwise open the new one
       onPanelChange(activePanel === panel ? null : panel)
     },
@@ -154,6 +163,12 @@ export function Sidebar({ activePanel, onPanelChange, children }: SidebarProps) 
           label="Inventory"
           isActive={activePanel === 'inventory'}
           onClick={() => handleButtonClick('inventory')}
+        />
+        <SidebarButton
+          icon={<EquipmentIcon />}
+          label="Equipment"
+          isActive={activePanel === 'equipment'}
+          onClick={() => handleButtonClick('equipment')}
         />
       </div>
     </div>
