@@ -1,0 +1,144 @@
+# REALM
+
+A modern 2D browser MMO inspired by RuneScape, built with TypeScript.
+
+## Tech Stack
+
+| Layer | Technology | Version |
+|-------|------------|---------|
+| Rendering | PixiJS | v8.6 |
+| Multiplayer | Colyseus | v0.17 |
+| UI | React | v19 |
+| Database | PostgreSQL | v16 |
+| ORM | Drizzle | v0.45 |
+| Build | Vite | v6 |
+| Package Manager | pnpm | v9 |
+
+## Quick Start
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start PostgreSQL
+docker-compose up -d
+
+# Start dev servers (client + server)
+pnpm dev
+
+# Open http://localhost:5173
+```
+
+## Project Structure
+
+```
+realm/
+├── packages/
+│   ├── client/          # PixiJS + React game client
+│   │   ├── src/
+│   │   │   ├── Game.ts           # Main game controller
+│   │   │   ├── entities/         # Player, RemotePlayer, WorldObject
+│   │   │   ├── systems/          # Camera, Pathfinding, Network, Tilemap
+│   │   │   └── ui/               # React UI components
+│   │   └── package.json
+│   │
+│   ├── server/          # Colyseus game server
+│   │   ├── src/
+│   │   │   ├── rooms/            # WorldRoom (main game room)
+│   │   │   ├── schemas/          # Colyseus state schemas
+│   │   │   └── database/         # Drizzle ORM + PostgreSQL
+│   │   └── package.json
+│   │
+│   └── shared/          # Shared types and game data
+│       └── src/
+│           ├── index.ts          # Core types, tile constants
+│           ├── skills.ts         # 23 skill definitions, XP formulas
+│           ├── items.ts          # Item definitions
+│           └── worldObjects.ts   # World object definitions
+│
+├── docker-compose.yml   # PostgreSQL for local dev
+├── eslint.config.mjs    # ESLint flat config
+├── .prettierrc          # Prettier config
+└── PLAN.md              # Development roadmap
+```
+
+## Available Scripts
+
+```bash
+# Development
+pnpm dev              # Start client + server
+pnpm dev:client       # Start only client (localhost:5173)
+pnpm dev:server       # Start only server (ws://localhost:2567)
+
+# Build
+pnpm build            # Build all packages
+
+# Code Quality
+pnpm lint             # Run ESLint
+pnpm lint:fix         # Fix ESLint issues
+pnpm format           # Format with Prettier
+pnpm format:check     # Check formatting
+pnpm typecheck        # TypeScript type checking
+```
+
+## Game Features (Current)
+
+### Implemented
+- Click-to-move pathfinding (A* algorithm)
+- Multiplayer with real-time sync
+- 3 working skills: Woodcutting, Fishing, Cooking
+- 23 skill definitions (OSRS-style XP curve)
+- Skill panel UI with level/XP display
+- Inventory panel (28 slots)
+- Chat system
+- Player nameplates
+- World objects (trees, fishing spots, fire)
+- Database persistence (skills, inventory)
+- Loading screen
+- Auto-save every 30 seconds
+
+### Coming Soon
+- Full inventory management (drop, use)
+- Combat system
+- Equipment slots
+- More skills
+- Multiple zones
+
+## Database
+
+PostgreSQL with Drizzle ORM. Tables:
+- `players` - Player accounts
+- `player_skills` - XP per skill
+- `player_inventory` - Items
+
+Server runs without database if unavailable (non-persistent mode).
+
+## Architecture Notes
+
+### State Sync
+Initial player data is sent via WebSocket messages (`playerData`, `worldObjects`) rather than Colyseus schema sync for reliability. Real-time updates (position, actions) use schema sync.
+
+### Skill Actions
+1. Click world object → pathfind to adjacent tile
+2. Send `startAction` message to server
+3. Server validates level requirements
+4. Timer completes → grant XP + item
+5. Auto-repeat until depleted or inventory full
+
+## Development
+
+### VS Code Setup
+The `.vscode/settings.json` enables:
+- Format on save (Prettier)
+- ESLint auto-fix on save
+
+### Adding a New Skill
+1. Add to `SkillType` enum in `shared/src/skills.ts`
+2. Add definition to `SKILL_DEFINITIONS`
+3. Add world object type in `shared/src/worldObjects.ts`
+4. Spawn objects in `server/src/rooms/WorldRoom.ts`
+5. Create entity renderer in `client/src/entities/`
+
+## License
+
+Private - All rights reserved

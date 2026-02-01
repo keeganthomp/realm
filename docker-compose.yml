@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: realm-postgres
+    environment:
+      POSTGRES_USER: realm
+      POSTGRES_PASSWORD: realm_dev
+      POSTGRES_DB: realm
+    ports:
+      - "5432:5432"
+    volumes:
+      - realm_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  realm_postgres_data:

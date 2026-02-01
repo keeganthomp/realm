@@ -1,0 +1,204 @@
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { Game } from './Game'
+import { NetworkManager } from './systems/NetworkManager'
+import { ChatPanel } from './ui/ChatPanel'
+import { PlayerList } from './ui/PlayerList'
+import { ConnectionStatus } from './ui/ConnectionStatus'
+import { SkillsPanel } from './ui/SkillsPanel'
+import { InventoryPanel } from './ui/InventoryPanel'
+import { ActionProgress } from './ui/ActionProgress'
+import { Notifications, useNotifications } from './ui/Notifications'
+import { LoadingScreen } from './ui/LoadingScreen'
+
+export function App() {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const gameRef = useRef<Game | null>(null)
+  const networkRef = useRef<NetworkManager | null>(null)
+  const initRef = useRef(false)
+
+  const [isLoading, setIsLoading] = useState(true)
+
+  const [loadingStatus, setLoadingStatus] = useState('Initializing...')
+  const [connected, setConnected] = useState(false)
+  const [players, setPlayers] = useState<Map<string, { name: string }>>(new Map())
+  const [messages, setMessages] = useState<Array<{ sender: string; text: string }>>([])
+  const [skills, setSkills] = useState<Map<string, number>>(new Map())
+  const [inventory, setInventory] = useState<Array<{ itemType: string; quantity: number }>>([])
+  const [currentAction, setCurrentAction] = useState<{
+    duration: number
+    action: string
+  } | null>(null)
+
+  const { notifications, showLevelUp, showXpGain, showError } = useNotifications()
+
+  // Store notification functions in refs to avoid stale closures
+  const showLevelUpRef = useRef(showLevelUp)
+  const showXpGainRef = useRef(showXpGain)
+  const showErrorRef = useRef(showError)
+
+  useEffect(() => {
+    showLevelUpRef.current = showLevelUp
+    showXpGainRef.current = showXpGain
+    showErrorRef.current = showError
+  }, [showLevelUp, showXpGain, showError])
+
+  useEffect(() => {
+    if (!containerRef.current || initRef.current) return
+    initRef.current = true
+
+    const init = async () => {
+      // Initialize game
+      setLoadingStatus('Loading game engine...')
+      const game = new Game()
+      await game.init(containerRef.current!)
+      gameRef.current = game
+
+      // Initialize network
+      setLoadingStatus('Connecting to server...')
+      const network = new NetworkManager(game)
+      networkRef.current = network
+
+      // Connection callbacks
+      network.onConnected = () => {
+        setConnected(true)
+        setLoadingStatus('Entering world...')
+        // Small delay to ensure world objects are received
+        setTimeout(() => {
+          setIsLoading(false)
+        }, 300)
+      }
+      network.onDisconnected = () => {
+        setConnected(false)
+        setIsLoading(true)
+        setLoadingStatus('Disconnected. Retrying...')
+      }
+      network.onConnectionRetry = (attempt, delayMs, error) => {
+        setLoadingStatus(
+          `Connection failed (${error}). Retrying in ${Math.ceil(delayMs / 1000)}s...`
+        )
+        if (attempt === 1) {
+          setIsLoading(true)
+        }
+      }
+      network.onPlayersChanged = (playerMap) => setPlayers(new Map(playerMap))
+
+      // Chat
+      network.onChatMessage = (sender, text) => {
+        setMessages((prev) => [...prev.slice(-50), { sender, text }])
+      }
+
+      // Skills
+      network.onSkillsChanged = (skillMap) => {
+        setSkills(new Map(skillMap))
+      }
+
+      // Inventory
+      network.onInventoryChanged = (items) => {
+        setInventory([...items])
+      }
+
+      // Actions
+      network.onActionStarted = (duration, action) => {
+        setCurrentAction({ duration, action })
+      }
+
+      network.onActionComplete = (xpGained, skill, _itemGained) => {
+        showXpGainRef.current(skill, xpGained)
+      }
+
+      network.onActionError = (message) => {
+        showErrorRef.current(message)
+        setCurrentAction(null)
+      }
+
+      // Level ups
+      network.onLevelUp = (playerName, skill, newLevel) => {
+        showLevelUpRef.current(skill, newLevel)
+        setMessages((prev) => [
+          ...prev.slice(-50),
+          {
+            sender: 'System',
+            text: `${playerName} reached level ${newLevel} ${skill}!`
+          }
+        ])
+      }
+
+      // Connect to server
+      await network.connect()
+
+      // Start game loop
+      game.start()
+    }
+
+    init().catch(console.error)
+
+    return () => {
+      networkRef.current?.disconnect()
+      gameRef.current?.destroy()
+    }
+  }, [])
+
+  const handleSendMessage = useCallback((text: string) => {
+    networkRef.current?.sendChat(text)
+  }, [])
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* Loading Screen */}
+      {isLoading && <LoadingScreen status={loadingStatus} />}
+
+      {/* Game canvas container */}
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+
+      {/* UI Overlay - only show when loaded */}
+      {!isLoading && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            pointerEvents: 'none',
+            overflow: 'hidden'
+          }}
+        >
+          {/* Top left - Player list */}
+          <PlayerList players={players} />
+
+          {/* Top right - Skills panel */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              pointerEvents: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8
+            }}
+          >
+            <SkillsPanel skills={skills} />
+            <InventoryPanel items={inventory} />
+          </div>
+
+          {/* Bottom right - Connection indicator */}
+          <div style={{ position: 'absolute', bottom: 16, right: 16, pointerEvents: 'auto' }}>
+            <ConnectionStatus connected={connected} />
+          </div>
+
+          {/* Bottom left - Chat */}
+          <ChatPanel messages={messages} onSend={handleSendMessage} />
+
+          {/* Center - Action progress */}
+          {currentAction && (
+            <ActionProgress duration={currentAction.duration} action={currentAction.action} />
+          )}
+
+          {/* Center - Notifications */}
+          <Notifications notifications={notifications} />
+        </div>
+      )}
+    </div>
+  )
+}
