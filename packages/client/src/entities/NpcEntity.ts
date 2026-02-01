@@ -26,6 +26,9 @@ export class NpcEntity {
   private currentHp: number
   private maxHp: number
   private heightProvider: ((tileX: number, tileY: number) => number) | null = null
+  private cachedTileX: number = -1
+  private cachedTileY: number = -1
+  private cachedHeightY: number = 0
 
   private guiTexture: AdvancedDynamicTexture | null = null
   private nameLabel: TextBlock | null = null
@@ -430,8 +433,12 @@ export class NpcEntity {
     const scale = 1 / TILE_SIZE
     const tileX = Math.floor(this.x / TILE_SIZE)
     const tileY = Math.floor(this.y / TILE_SIZE)
-    const heightY = this.heightProvider ? this.heightProvider(tileX, tileY) : 0
-    this.node.position = new Vector3(this.x * scale, heightY, this.y * scale)
+    if (tileX !== this.cachedTileX || tileY !== this.cachedTileY) {
+      this.cachedHeightY = this.heightProvider ? this.heightProvider(tileX, tileY) : 0
+      this.cachedTileX = tileX
+      this.cachedTileY = tileY
+    }
+    this.node.position.set(this.x * scale, this.cachedHeightY, this.y * scale)
   }
 
   getPosition(): { x: number; y: number } {

@@ -1,7 +1,9 @@
 // Shared types and constants for Realm
 
+import type { WorldObjectType } from './worldObjects'
+
 export const TILE_SIZE = 32
-export const CHUNK_SIZE = 16 // tiles per chunk
+export const CHUNK_SIZE = 32 // tiles per chunk
 
 // Tile types
 export enum TileType {
@@ -24,6 +26,30 @@ export interface Position {
 export interface TilePosition {
   tileX: number
   tileY: number
+}
+
+export interface ChunkCoord {
+  chunkX: number
+  chunkY: number
+}
+
+export type ChunkKey = string
+
+export interface ChunkObjectData {
+  id: string
+  objectType: WorldObjectType
+  x: number
+  y: number
+  depleted?: boolean
+  respawnAt?: number
+}
+
+export interface ChunkData {
+  chunkX: number
+  chunkY: number
+  tiles: TileType[][]
+  heights: number[][]
+  objects: ChunkObjectData[]
 }
 
 export interface PlayerState {
@@ -56,6 +82,10 @@ export function tileToWorld(tile: TilePosition): Position {
     x: tile.tileX * TILE_SIZE + TILE_SIZE / 2,
     y: tile.tileY * TILE_SIZE + TILE_SIZE / 2
   }
+}
+
+export function getChunkKey(chunkX: number, chunkY: number): ChunkKey {
+  return `${chunkX},${chunkY}`
 }
 
 // Calculate direction from one position to another

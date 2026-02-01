@@ -26,8 +26,12 @@ import {
   calculateMaxHit,
   rollDamage,
   calculateCombatXp,
-  calculateMaxHp
+  calculateMaxHp,
+  CHUNK_SIZE,
+  getChunkKey
 } from '@realm/shared'
+import type { ChunkData, ChunkKey } from '@realm/shared'
+import { WorldGenerator } from '../world/WorldGenerator'
 import {
   getOrCreatePlayer,
   savePlayerSkills,
@@ -39,6 +43,8 @@ const MAX_INVENTORY_SIZE = 28
 
 const MAX_BANK_SIZE = 100
 const SPAWN_POINT = { tileX: 12, tileY: 10 } // Default respawn location
+const WORLD_SEED = 1337
+const CHUNK_RADIUS = 1
 
 export class WorldRoom extends Room {
   state!: WorldState
@@ -48,13 +54,18 @@ export class WorldRoom extends Room {
   private pendingSaves: Set<string> = new Set() // sessionIds with unsaved changes
   private playerBanks: Map<string, Array<{ itemType: string; quantity: number }>> = new Map()
   private combatInterval: { clear: () => void } | null = null
+  private generator: WorldGenerator = new WorldGenerator(WORLD_SEED)
+  private chunkCache: Map<ChunkKey, ChunkData> = new Map()
+  private chunkRefCounts: Map<ChunkKey, number> = new Map()
+  private playerChunks: Map<string, Set<ChunkKey>> = new Map()
+  private chunkObjectIds: Map<ChunkKey, Set<string>> = new Map()
+  private objectToChunk: Map<string, ChunkKey> = new Map()
 
   onCreate() {
     console.log('=== onCreate called ===', { roomId: this.roomId })
     try {
       this.setState(new WorldState())
-      // Spawn initial world objects
-      this.spawnWorldObjects()
+      // World objects now generated per chunk
       // Spawn NPCs
       this.spawnNpcs()
       console.log(
@@ -87,6 +98,8 @@ export class WorldRoom extends Room {
           player.direction = dy > 0 ? Direction.DOWN : Direction.UP
         }
       }
+
+      this.updatePlayerChunks(client.sessionId)
     })
 
     // Handle starting an action (chop tree, fish, etc)
@@ -154,6 +167,11 @@ export class WorldRoom extends Room {
       }
     })
 
+    // Client requests chunk resend (after handlers are ready)
+    this.onMessage('requestChunks', (client) => {
+      this.updatePlayerChunks(client.sessionId, true)
+    })
+
     // Respawn tick - check for depleted objects and dead NPCs to respawn
     this.clock.setInterval(() => {
       const now = Date.now()
@@ -161,6 +179,7 @@ export class WorldRoom extends Room {
         if (obj.depleted && obj.respawnAt > 0 && now >= obj.respawnAt) {
           obj.depleted = false
           obj.respawnAt = 0
+          this.updateCachedObjectState(id)
           // Broadcast respawn to all clients
           this.broadcast('objectUpdate', { id, depleted: false })
         }
@@ -485,6 +504,7 @@ export class WorldRoom extends Room {
     if (objDef.depletionChance > 0 && Math.random() < objDef.depletionChance) {
       worldObj.depleted = true
       worldObj.respawnAt = Date.now() + objDef.respawnTime
+      this.updateCachedObjectState(objectId)
       // Broadcast depletion to all clients
       this.broadcast('objectUpdate', { id: objectId, depleted: true })
     }
@@ -527,6 +547,140 @@ export class WorldRoom extends Room {
     if (notifyClient) {
       const client = this.clients.find((c) => c.sessionId === sessionId)
       client?.send('actionCancelled', {})
+    }
+  }
+
+  private updatePlayerChunks(sessionId: string, forceSend: boolean = false) {
+    const player = this.state.players.get(sessionId)
+    const client = this.clients.find((c) => c.sessionId === sessionId)
+    if (!player || !client) return
+
+    const { chunkX, chunkY } = this.getChunkCoordForPosition(player.x, player.y)
+    const desired = this.getVisibleChunkKeys(chunkX, chunkY, CHUNK_RADIUS)
+    const current = this.playerChunks.get(sessionId) ?? new Set<ChunkKey>()
+
+    for (const key of desired) {
+      if (!current.has(key)) {
+        const [cx, cy] = key.split(',').map(Number)
+        const chunk = this.ensureChunkLoaded(cx, cy)
+        this.incrementChunkRef(key)
+        client.send('chunkData', chunk)
+      } else if (forceSend) {
+        const [cx, cy] = key.split(',').map(Number)
+        const chunk = this.ensureChunkLoaded(cx, cy)
+        client.send('chunkData', chunk)
+      }
+    }
+
+    for (const key of current) {
+      if (!desired.has(key)) {
+        this.decrementChunkRef(key)
+        client.send('chunkUnload', { chunkKey: key })
+      }
+    }
+
+    this.playerChunks.set(sessionId, desired)
+  }
+
+  private getChunkCoordForPosition(x: number, y: number) {
+    const tile = worldToTile({ x, y })
+    return {
+      chunkX: Math.floor(tile.tileX / CHUNK_SIZE),
+      chunkY: Math.floor(tile.tileY / CHUNK_SIZE)
+    }
+  }
+
+  private getVisibleChunkKeys(centerX: number, centerY: number, radius: number): Set<ChunkKey> {
+    const keys = new Set<ChunkKey>()
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const cx = centerX + dx
+        const cy = centerY + dy
+        keys.add(getChunkKey(cx, cy))
+      }
+    }
+    return keys
+  }
+
+  private ensureChunkLoaded(chunkX: number, chunkY: number): ChunkData {
+    const key = getChunkKey(chunkX, chunkY)
+    let chunk = this.chunkCache.get(key)
+    if (!chunk) {
+      chunk = this.generator.generateChunk(chunkX, chunkY)
+      this.chunkCache.set(key, chunk)
+    }
+
+    if (!this.chunkObjectIds.has(key)) {
+      this.chunkObjectIds.set(key, new Set())
+    }
+
+    for (const objData of chunk.objects) {
+      if (!this.state.worldObjects.has(objData.id)) {
+        const obj = new WorldObject()
+        obj.id = objData.id
+        obj.objectType = objData.objectType
+        obj.x = objData.x
+        obj.y = objData.y
+        obj.depleted = objData.depleted ?? false
+        obj.respawnAt = objData.respawnAt ?? 0
+        this.state.worldObjects.set(obj.id, obj)
+      }
+      this.objectToChunk.set(objData.id, key)
+      this.chunkObjectIds.get(key)?.add(objData.id)
+    }
+
+    return chunk
+  }
+
+  private incrementChunkRef(key: ChunkKey) {
+    const count = this.chunkRefCounts.get(key) ?? 0
+    this.chunkRefCounts.set(key, count + 1)
+  }
+
+  private decrementChunkRef(key: ChunkKey) {
+    const count = this.chunkRefCounts.get(key) ?? 0
+    if (count <= 1) {
+      this.chunkRefCounts.delete(key)
+      this.unloadChunk(key)
+    } else {
+      this.chunkRefCounts.set(key, count - 1)
+    }
+  }
+
+  private unloadChunk(key: ChunkKey) {
+    const objectIds = this.chunkObjectIds.get(key)
+    if (!objectIds) return
+
+    const chunk = this.chunkCache.get(key)
+    if (chunk) {
+      for (const objId of objectIds) {
+        const worldObj = this.state.worldObjects.get(objId)
+        if (worldObj) {
+          const chunkObj = chunk.objects.find((obj) => obj.id === objId)
+          if (chunkObj) {
+            chunkObj.depleted = worldObj.depleted
+            chunkObj.respawnAt = worldObj.respawnAt
+          }
+          this.state.worldObjects.delete(objId)
+        }
+        this.objectToChunk.delete(objId)
+      }
+    }
+
+    this.chunkObjectIds.delete(key)
+  }
+
+  private updateCachedObjectState(objectId: string) {
+    const key = this.objectToChunk.get(objectId)
+    if (!key) return
+    const chunk = this.chunkCache.get(key)
+    const worldObj = this.state.worldObjects.get(objectId)
+    if (!chunk || !worldObj) return
+
+    const obj = chunk.objects.find((entry) => entry.id === objectId)
+    if (obj) {
+      obj.depleted = worldObj.depleted
+      obj.respawnAt = worldObj.respawnAt
     }
   }
 
@@ -1368,24 +1522,8 @@ export class WorldRoom extends Room {
       maxHp: player.maxHp
     })
 
-    // Send world objects to the newly joined client
-    const worldObjectsData: Array<{
-      id: string
-      objectType: string
-      x: number
-      y: number
-      depleted: boolean
-    }> = []
-    this.state.worldObjects.forEach((obj: WorldObject, id: string) => {
-      worldObjectsData.push({
-        id,
-        objectType: obj.objectType,
-        x: obj.x,
-        y: obj.y,
-        depleted: obj.depleted
-      })
-    })
-    client.send('worldObjects', worldObjectsData)
+    // Send initial chunks to the newly joined client
+    this.updatePlayerChunks(client.sessionId, true)
 
     // Send NPCs to the newly joined client
     const npcsData: Array<{
@@ -1503,6 +1641,13 @@ export class WorldRoom extends Room {
     this.pendingSaves.delete(client.sessionId)
     this.playerDbIds.delete(client.sessionId)
     this.playerBanks.delete(client.sessionId)
+    const chunks = this.playerChunks.get(client.sessionId)
+    if (chunks) {
+      for (const key of chunks) {
+        this.decrementChunkRef(key)
+      }
+      this.playerChunks.delete(client.sessionId)
+    }
     console.log(`${client.sessionId} left`)
     this.state.players.delete(client.sessionId)
 

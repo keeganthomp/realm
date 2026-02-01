@@ -77,22 +77,23 @@ export class WorldObjectEntity {
   }
 
   private createTree() {
-    // Trunk (cylinder)
+    // Trunk (low-poly cylinder)
     const trunkMat = new StandardMaterial('trunkMat_' + this.id, this.scene)
     trunkMat.diffuseColor = new Color3(0.36, 0.25, 0.2) // #5c4033
     trunkMat.specularColor = Color3.Black()
 
     const trunk = MeshBuilder.CreateCylinder(
       'trunk_' + this.id,
-      { height: 0.6, diameter: 0.25, tessellation: 8 },
+      { height: 0.7, diameterTop: 0.18, diameterBottom: 0.26, tessellation: 6 },
       this.scene
     )
     trunk.material = trunkMat
-    trunk.position.y = 0.3
+    trunk.position.y = 0.35
     trunk.parent = this.node
+    trunk.convertToFlatShadedMesh()
     this.meshes.push(trunk)
 
-    // Canopy (sphere) - different colors for different tree types
+    // Canopy (low-poly cone) - different colors for different tree types
     let canopyColor = new Color3(0.13, 0.55, 0.13) // #228b22 Forest Green
     if (this.objectType === WorldObjectType.OAK_TREE) {
       canopyColor = new Color3(0.18, 0.55, 0.34) // #2e8b57 Sea Green
@@ -104,14 +105,15 @@ export class WorldObjectEntity {
     canopyMat.diffuseColor = canopyColor
     canopyMat.specularColor = Color3.Black()
 
-    const canopy = MeshBuilder.CreateSphere(
+    const canopy = MeshBuilder.CreateCylinder(
       'canopy_' + this.id,
-      { diameter: 1.0, segments: 8 },
+      { height: 0.7, diameterTop: 0.2, diameterBottom: 1.0, tessellation: 6 },
       this.scene
     )
     canopy.material = canopyMat
-    canopy.position.y = 0.9
+    canopy.position.y = 1.0
     canopy.parent = this.node
+    canopy.convertToFlatShadedMesh()
     this.meshes.push(canopy)
   }
 

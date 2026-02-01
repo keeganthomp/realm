@@ -14,6 +14,9 @@ export class Camera {
   private pickableMeshes: Set<AbstractMesh> | null = null
   private panOffsetX: number = 0
   private panOffsetZ: number = 0
+  private cachedTarget: Vector3 = new Vector3()
+  private cachedOrthoWidth: number = 0
+  private cachedOrthoHeight: number = 0
 
   // Current camera target in 3D world coordinates
   private targetX: number = 0
@@ -54,8 +57,12 @@ export class Camera {
     const worldHeight3D = this.worldHeight / TILE_SIZE
 
     // Camera view bounds depend on ortho size
-    const orthoWidth = (this.arcCamera.orthoRight ?? 0) - (this.arcCamera.orthoLeft ?? 0)
-    const orthoHeight = (this.arcCamera.orthoTop ?? 0) - (this.arcCamera.orthoBottom ?? 0)
+    if (this.cachedOrthoWidth === 0 && this.cachedOrthoHeight === 0) {
+      this.cachedOrthoWidth = (this.arcCamera.orthoRight ?? 0) - (this.arcCamera.orthoLeft ?? 0)
+      this.cachedOrthoHeight = (this.arcCamera.orthoTop ?? 0) - (this.arcCamera.orthoBottom ?? 0)
+    }
+    const orthoWidth = this.cachedOrthoWidth
+    const orthoHeight = this.cachedOrthoHeight
 
     // Adjust clamping for isometric view
     const halfViewX = orthoWidth / 2
@@ -73,12 +80,20 @@ export class Camera {
     }
 
     // Update camera target
-    this.arcCamera.setTarget(new Vector3(this.targetX, heightY, this.targetZ))
+    this.cachedTarget.set(this.targetX, heightY, this.targetZ)
+    this.arcCamera.setTarget(this.cachedTarget)
   }
 
   resize(screenWidth: number, screenHeight: number) {
     this.screenWidth = screenWidth
     this.screenHeight = screenHeight
+    this.cachedOrthoWidth = (this.arcCamera.orthoRight ?? 0) - (this.arcCamera.orthoLeft ?? 0)
+    this.cachedOrthoHeight = (this.arcCamera.orthoTop ?? 0) - (this.arcCamera.orthoBottom ?? 0)
+  }
+
+  setWorldSize(worldWidth: number, worldHeight: number) {
+    this.worldWidth = worldWidth
+    this.worldHeight = worldHeight
   }
 
   setPickableMeshes(meshes: Mesh[]) {

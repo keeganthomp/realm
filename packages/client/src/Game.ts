@@ -45,6 +45,9 @@ export class Game {
   private panKeys: Set<string> = new Set()
   private skillingActionActive: boolean = false
   private combatTargetId: string | null = null
+  private chunkObjects: Map<string, string[]> = new Map()
+  private lastCameraX: number = -1
+  private lastCameraY: number = -1
 
   // Callbacks
   public onLocalPlayerMove?: (position: Position, path: Position[]) => void
@@ -104,7 +107,8 @@ export class Game {
     this.tilemap = new TilemapRenderer(this.scene)
     await this.tilemap.init()
 
-    this.pathfinding = new Pathfinding(this.tilemap.getCollisionGrid(), this.tilemap.getHeights())
+    const { grid, heights, offsetX, offsetY } = this.tilemap.buildCollisionGrid()
+    this.pathfinding = new Pathfinding(grid, heights, offsetX, offsetY)
 
     const canvas = this.engine.getRenderingCanvas()!
     this.camera = new Camera(
@@ -573,6 +577,43 @@ export class Game {
     }
   }
 
+  applyChunk(chunk: import('@realm/shared').ChunkData) {
+    this.tilemap.applyChunk(chunk)
+    const ids: string[] = []
+    for (const obj of chunk.objects) {
+      this.addWorldObject(obj.id, obj.objectType, obj.x, obj.y)
+      if (obj.depleted) {
+        this.updateWorldObject(obj.id, true)
+      }
+      ids.push(obj.id)
+    }
+    this.chunkObjects.set(`${chunk.chunkX},${chunk.chunkY}`, ids)
+    this.refreshNavigationGrid()
+    this.camera.setPickableMeshes(this.tilemap.getTerrainMeshes())
+    if (!this.player.isMoving) {
+      this.player.setPath([])
+    }
+  }
+
+  removeChunk(chunkKey: string) {
+    this.tilemap.removeChunk(chunkKey)
+    const ids = this.chunkObjects.get(chunkKey)
+    if (ids) {
+      for (const id of ids) {
+        this.removeWorldObject(id)
+      }
+      this.chunkObjects.delete(chunkKey)
+    }
+    this.refreshNavigationGrid()
+    this.camera.setPickableMeshes(this.tilemap.getTerrainMeshes())
+  }
+
+  private refreshNavigationGrid() {
+    const { grid, heights, offsetX, offsetY } = this.tilemap.buildCollisionGrid()
+    this.pathfinding.updateGrid(grid, heights, offsetX, offsetY)
+    this.camera.setWorldSize(this.tilemap.worldWidth, this.tilemap.worldHeight)
+  }
+
   private playerActionModeOverride: 'skilling' | 'combat' | 'cooking' | 'chopping' | null = null
 
   setSkillingAction(action: string | null) {
@@ -644,7 +685,14 @@ export class Game {
         this.player.setActionTarget(this.lastActionTarget)
       }
 
-      this.camera.follow(this.player.position, this.getHeightAtPosition(this.player.position))
+      if (
+        this.player.position.x !== this.lastCameraX ||
+        this.player.position.y !== this.lastCameraY
+      ) {
+        this.camera.follow(this.player.position, this.getHeightAtPosition(this.player.position))
+        this.lastCameraX = this.player.position.x
+        this.lastCameraY = this.player.position.y
+      }
 
       if (this.panKeys.size > 0) {
         const panSpeed = 6

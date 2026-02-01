@@ -3,14 +3,28 @@ import type { TilePosition } from '@realm/shared'
 export class Pathfinding {
   private grid: number[][]
   private heights: number[][] | null = null
+  private offsetX: number = 0
+  private offsetY: number = 0
 
-  constructor(collisionGrid: number[][], heights?: number[][]) {
+  constructor(
+    collisionGrid: number[][],
+    heights?: number[][],
+    offsetX: number = 0,
+    offsetY: number = 0
+  ) {
     this.grid = collisionGrid
     this.heights = heights ?? null
+    this.offsetX = offsetX
+    this.offsetY = offsetY
   }
 
   findPath(startX: number, startY: number, endX: number, endY: number): TilePosition[] | null {
-    if (!this.isWalkable(startX, startY) || !this.isWalkable(endX, endY)) {
+    const localStartX = startX - this.offsetX
+    const localStartY = startY - this.offsetY
+    const localEndX = endX - this.offsetX
+    const localEndY = endY - this.offsetY
+
+    if (!this.isWalkable(localStartX, localStartY) || !this.isWalkable(localEndX, localEndY)) {
       return null
     }
 
@@ -19,16 +33,22 @@ export class Pathfinding {
     const closed = new Set<string>()
     const indexByPos = new Map<string, number>()
 
-    const startKey = `${startX},${startY}`
-    const endKey = `${endX},${endY}`
+    const startKey = `${localStartX},${localStartY}`
+    const endKey = `${localEndX},${localEndY}`
 
     const h = (x: number, y: number) => {
-      const dx = Math.abs(x - endX)
-      const dy = Math.abs(y - endY)
+      const dx = Math.abs(x - localEndX)
+      const dy = Math.abs(y - localEndY)
       return Math.max(dx, dy)
     }
 
-    nodes.push({ x: startX, y: startY, g: 0, f: h(startX, startY), parent: null })
+    nodes.push({
+      x: localStartX,
+      y: localStartY,
+      g: 0,
+      f: h(localStartX, localStartY),
+      parent: null
+    })
     open.push(0)
     indexByPos.set(startKey, 0)
 
@@ -62,9 +82,9 @@ export class Pathfinding {
         const path: TilePosition[] = []
         let nodeIndex: number | null = currentIndex
         while (nodeIndex !== null) {
-          const node = nodes[nodeIndex]
+          const node: (typeof nodes)[number] = nodes[nodeIndex]
           if (node.parent !== null) {
-            path.push({ tileX: node.x, tileY: node.y })
+            path.push({ tileX: node.x + this.offsetX, tileY: node.y + this.offsetY })
           }
           nodeIndex = node.parent
         }
@@ -116,14 +136,24 @@ export class Pathfinding {
     return null
   }
 
-  updateGrid(collisionGrid: number[][], heights?: number[][]) {
+  updateGrid(
+    collisionGrid: number[][],
+    heights?: number[][],
+    offsetX: number = 0,
+    offsetY: number = 0
+  ) {
     this.grid = collisionGrid
     if (heights) {
       this.heights = heights
     }
+    this.offsetX = offsetX
+    this.offsetY = offsetY
   }
 
   private isWalkable(x: number, y: number) {
+    if (this.grid.length === 0 || this.grid[0].length === 0) {
+      return false
+    }
     if (y < 0 || y >= this.grid.length || x < 0 || x >= this.grid[0].length) {
       return false
     }

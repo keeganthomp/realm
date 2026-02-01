@@ -1,7 +1,7 @@
 import { Client, Room } from '@colyseus/sdk'
 import type { Game } from '../Game'
 import type { Position } from '@realm/shared'
-import { Direction, WorldObjectType, NpcType } from '@realm/shared'
+import { Direction, NpcType } from '@realm/shared'
 
 const DEFAULT_SERVER_URL = import.meta.env.DEV ? 'http://localhost:2567' : window.location.origin
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? DEFAULT_SERVER_URL
@@ -271,20 +271,31 @@ export class NetworkManager {
       this.onChatMessage?.(message.sender, message.text)
     })
 
-    // World objects sent on join
+    this.room.send('requestChunks', {})
+
     this.room.onMessage(
-      'worldObjects',
-      (
-        data: Array<{ id: string; objectType: string; x: number; y: number; depleted: boolean }>
-      ) => {
-        for (const obj of data) {
-          this.game.addWorldObject(obj.id, obj.objectType as WorldObjectType, obj.x, obj.y)
-          if (obj.depleted) {
-            this.game.updateWorldObject(obj.id, true)
-          }
-        }
+      'chunkData',
+      (data: {
+        chunkX: number
+        chunkY: number
+        tiles: number[][]
+        heights: number[][]
+        objects: Array<{
+          id: string
+          objectType: string
+          x: number
+          y: number
+          depleted?: boolean
+          respawnAt?: number
+        }>
+      }) => {
+        this.game.applyChunk(data as any)
       }
     )
+
+    this.room.onMessage('chunkUnload', (data: { chunkKey: string }) => {
+      this.game.removeChunk(data.chunkKey)
+    })
 
     // Player data sent via message
     this.room.onMessage(

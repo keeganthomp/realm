@@ -67,7 +67,17 @@ export function App() {
       // Initialize game
       setLoadingStatus('Loading game engine...')
       const game = new Game()
-      await game.init(containerRef.current!)
+      try {
+        await game.init(containerRef.current!)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (/webgl not supported/i.test(message)) {
+          setIsLoading(true)
+          setLoadingStatus('WebGL not supported. Please enable WebGL or try another browser.')
+          return
+        }
+        throw error
+      }
       gameRef.current = game
 
       // Initialize network
