@@ -442,7 +442,7 @@ Thornwick is a 48x48 tile medieval market town inspired by Varrock.
 - [x] Defence bonus reduces incoming damage
 - [x] Database persistence for equipment
 
-#### 8.6 Mining & Smithing (Planned)
+#### 8.7 Mining & Smithing (Planned)
 - [ ] Mining skill (rocks → ore)
 - [ ] Smithing skill (ore → bar → item)
 - [ ] Furnace for smelting
@@ -453,7 +453,22 @@ Thornwick is a 48x48 tile medieval market town inspired by Varrock.
 
 ---
 
-### Phase 8.5: Combat Polish (Planned)
+### Phase 8.5: Procedural Character System ✅
+**Goal**: Replace GLB models with procedural joint-based characters
+
+- [x] SimpleCharacter class with TransformNode hierarchy
+- [x] Joint-based animation system (walk cycle, idle)
+- [x] OSRS-style chunky aesthetic (gaps at joints like waist, shoulders)
+- [x] Equipment attachment system per joint
+- [x] Remote player equipment sync
+- [x] Performance optimizations (mesh instancing, freezeWorldMatrix)
+- [x] Memory leak fixes in dispose() methods
+
+**Deliverable**: Performant procedural characters ✅
+
+---
+
+### Phase 8.6: Combat Polish (Planned)
 **Goal**: Improve combat feedback and balance
 
 - [ ] HP regeneration (1 HP per minute out of combat)
@@ -644,9 +659,9 @@ pnpm typecheck        # TypeScript type checking
 
 ## Current Status
 
-**Phases 1-8.4 Complete** - Full combat system, 3D terrain, town system, first town (Thornwick), and equipment system with visual gear on characters.
+**Phases 1-8.5 Complete** - Full combat system, 3D terrain, town system, first town (Thornwick), equipment system, and procedural character system with performance optimizations.
 
-**Next: Phase 8.5 (Combat Polish)** - Add HP regen, player damage feedback, then Phase 8.6 (Mining & Smithing).
+**Next: Phase 8.6 (Combat Polish)** - Add HP regen, player damage feedback, then Phase 8.7 (Mining & Smithing).
 
 ### Thornwick Town (Phase 7)
 - 48x48 tile medieval market town with perimeter walls
@@ -679,6 +694,14 @@ pnpm typecheck        # TypeScript type checking
 - Goblins drop bronze gear, Guards drop iron gear
 - Weapons stall sells bronze equipment
 
+### Procedural Character System (Phase 8.5)
+- SimpleCharacter class using TransformNode hierarchy (no GLB models)
+- Joint-based animation system with walk cycle and idle poses
+- OSRS-style chunky aesthetic with gaps at joints (waist, shoulders)
+- Equipment meshes attach to specific joints (weapon to hand, helmet to head)
+- Performance optimizations: mesh instancing, freezeWorldMatrix for static objects
+- Memory leak fixes in dispose() methods
+
 ### 3D Terrain (Phase 5.5)
 - Babylon.js perspective camera (OSRS-style angle)
 - Height map with plateaus and cliffs
@@ -708,14 +731,14 @@ pnpm typecheck        # TypeScript type checking
 
 ## Next Steps
 
-1. **Phase 8.5: Combat Polish** (Priority)
+1. **Phase 8.6: Combat Polish** (Priority)
    - Add HP regeneration (1 HP per minute out of combat)
    - Add player hit splats when taking damage
    - Add screen flash effect on damage
    - Add Hobgoblin NPC (lvl 28) for steel drops
    - Add Black Knight NPC (lvl 33) for rare steel armor
 
-2. **Phase 8.6: Mining & Smithing**
+2. **Phase 8.7: Mining & Smithing**
    - Mining skill (rocks → ore)
    - Smithing skill (ore → bar → item at anvil)
    - Add ore rocks outside town walls

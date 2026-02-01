@@ -101,6 +101,8 @@ pnpm typecheck        # TypeScript type checking
 - **Equipment system** with 7 slots (head, body, legs, feet, hands, weapon, offhand)
 - **Visual equipment** on player models (weapons, shields, armor visible in 3D)
 - **Equipment drops** from NPCs (goblins drop bronze, guards drop iron)
+- **Procedural character system** - joint-based characters with walk/idle animations (no GLB models)
+- **Performance optimizations** - mesh instancing, freezeWorldMatrix for static objects
 - Skill panel UI with level/XP display
 - Inventory panel (28 slots) with equip option
 - Equipment panel with stat bonuses
@@ -131,10 +133,10 @@ pnpm typecheck        # TypeScript type checking
   - Cooking fire in inn, anvil at blacksmith
 
 ### Coming Soon
-- HP regeneration and damage feedback
-- Mining and Smithing skills
-- Additional towns and zones
-- Quest system
+- HP regeneration and damage feedback (Phase 8.6)
+- Mining and Smithing skills (Phase 8.7)
+- Additional towns and zones (Phase 9)
+- Quest system (Phase 10)
 
 ## Town System
 

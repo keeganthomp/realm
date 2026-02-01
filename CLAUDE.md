@@ -7,8 +7,10 @@ This file provides guidance to Claude Code when working with this repository. Re
 **Realm** is a 2D browser MMO inspired by RuneScape (OSRS), built with TypeScript. Players spawn in **Thornwick**, a medieval market town, and can explore, train skills, fight NPCs, and interact with other players in real-time.
 
 ### Current State
-- **Phases 1-8 complete**: Movement, multiplayer, skills, inventory, banking, combat, 3D terrain, town system, equipment
+- **Phases 1-8.5 complete**: Movement, multiplayer, skills, inventory, banking, combat, 3D terrain, town system, equipment, procedural characters
 - **Equipment system**: 7 slots, bronze/iron/steel tiers, visual gear on characters, NPC drops
+- **Procedural character system**: Joint-based SimpleCharacter with walk/idle animations, OSRS-style chunky aesthetic
+- **Performance optimizations**: Mesh instancing, freezeWorldMatrix for static objects, memory leak fixes
 - **First town**: Thornwick (48x48 tiles) - fully decorated with marketplace, fountain, stalls, torches, props
 - **Next up**: HP regen, damage feedback, mining/smithing, more towns
 
@@ -79,6 +81,7 @@ packages/
 | `entities/RemotePlayer.ts` | Other players with interpolation. |
 | `entities/WorldObjectEntity.ts` | Trees, fishing spots, bank booths - 3D meshes. |
 | `entities/NpcEntity.ts` | NPCs with health bars, hit splats, death states. |
+| `character/SimpleCharacter.ts` | Procedural joint-based character with walk/idle animations. |
 
 ### UI Components (`src/ui/`)
 
@@ -389,6 +392,28 @@ game.onLocalPlayerMove = (pos, path) => network.sendMove(pos, path)
 - Terrain has height levels 0-2
 - Pathfinding blocks climbs > 1 level
 - Entities use `setHeightProvider()` for Y positioning
+- Call `refreshHeight()` after chunks load to update entity positions
+
+### Performance Patterns
+- Use `freezeWorldMatrix()` for static objects (call `computeWorldMatrix(true)` first)
+- Use mesh instancing via `SharedResources.getMeshTemplate()` and `createMeshInstance()`
+- Track previous state in NetworkManager to avoid redundant sync (e.g., `remotePlayerEquipment` Map)
+- Clean up resources in `dispose()` methods (meshes, transform nodes, GUI controls)
+- Define constant arrays at module level, not inside functions (e.g., `LIMB_JOINTS`)
+
+### Procedural Character System
+The `SimpleCharacter` class creates OSRS-style characters using TransformNode hierarchy:
+```typescript
+// Joint hierarchy (no GLB models)
+pelvis → torso → head
+       → upperArmL → lowerArmL → hand_L (equipment attach point)
+       → upperArmR → lowerArmR → hand_R (weapon attach point)
+       → upperLegL → lowerLegL
+       → upperLegR → lowerLegR
+
+// OSRS-style gaps at joints (waist, shoulders) - no connecting geometry
+// Equipment meshes attach to joints: weapon→hand_R, shield→hand_L, helmet→head
+```
 
 ---
 
@@ -401,6 +426,7 @@ game.onLocalPlayerMove = (pos, path) => network.sendMove(pos, path)
 5. **Don't hardcode positions** - Use town definitions or TILE_SIZE constants
 6. **Don't modify shared types without checking both client and server**
 7. **NEVER stack entities on the same tile** - NPCs, world objects, and interactable items must NEVER share the same tile position. This makes objects unclickable/unreachable. When placing items in town definitions, always verify coordinates don't overlap with other placements.
+8. **Don't call freezeWorldMatrix() before height provider is set** - Static objects will freeze at Y=0 and sink into terrain. Call in `setHeightProvider()`, not constructor.
 
 ---
 
@@ -417,8 +443,10 @@ game.onLocalPlayerMove = (pos, path) => network.sendMove(pos, path)
 | Game logic | `server/src/rooms/WorldRoom.ts` |
 | 3D rendering | `client/src/systems/TilemapRenderer.ts` |
 | Entity visuals | `client/src/entities/*.ts` |
+| Character system | `client/src/character/SimpleCharacter.ts` |
 | UI panels | `client/src/ui/*.tsx` |
 | Database | `server/src/database/schema.ts` |
+| Mesh instancing | `client/src/systems/SharedResources.ts` |
 
 ---
 
