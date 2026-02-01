@@ -11,7 +11,10 @@ import {
   Scene,
   StandardMaterial,
   Color3,
-  Mesh
+  Mesh,
+  MeshBuilder,
+  InstancedMesh,
+  TransformNode
 } from '@babylonjs/core'
 import { AdvancedDynamicTexture, TextBlock, Rectangle, Control } from '@babylonjs/gui'
 
@@ -347,6 +350,132 @@ export class SharedResources {
 
   get mushroomBrownMaterial(): StandardMaterial {
     return this.getMaterial('mushroomBrown', new Color3(0.55, 0.4, 0.25))
+  }
+
+  // ============ Mesh Templates for Instancing ============
+
+  /**
+   * Get or create a mesh template for instancing
+   * Template meshes are invisible and used only for creating instances
+   */
+  getMeshTemplate(name: string, createFn: () => Mesh): Mesh {
+    let template = this.meshTemplates.get(name)
+    if (!template) {
+      template = createFn()
+      template.isVisible = false // Template is never rendered directly
+      template.setEnabled(false) // Disable to prevent any processing
+      this.meshTemplates.set(name, template)
+    }
+    return template
+  }
+
+  /**
+   * Create an instance from a mesh template
+   * The instance can be parented and positioned independently
+   */
+  createMeshInstance(templateName: string, instanceId: string, parent: TransformNode): InstancedMesh | null {
+    const template = this.meshTemplates.get(templateName)
+    if (!template) return null
+
+    const instance = template.createInstance(`${templateName}_${instanceId}`)
+    instance.parent = parent
+    return instance
+  }
+
+  // ============ Pre-built Mesh Templates ============
+  // These are common meshes used many times (barrels, crates, etc.)
+
+  /**
+   * Get barrel body mesh template
+   */
+  getBarrelBodyTemplate(): Mesh {
+    return this.getMeshTemplate('barrelBody', () => {
+      const mesh = MeshBuilder.CreateCylinder('tpl_barrelBody', {
+        height: 0.5, diameterTop: 0.35, diameterBottom: 0.35, tessellation: 12
+      }, this.scene)
+      mesh.material = this.woodMaterial
+      return mesh
+    })
+  }
+
+  getBarrelBulgeTemplate(): Mesh {
+    return this.getMeshTemplate('barrelBulge', () => {
+      const mesh = MeshBuilder.CreateCylinder('tpl_barrelBulge', {
+        height: 0.2, diameter: 0.4, tessellation: 12
+      }, this.scene)
+      mesh.material = this.woodMaterial
+      return mesh
+    })
+  }
+
+  getBarrelBandTemplate(): Mesh {
+    return this.getMeshTemplate('barrelBand', () => {
+      const mesh = MeshBuilder.CreateTorus('tpl_barrelBand', {
+        diameter: 0.36, thickness: 0.02, tessellation: 12
+      }, this.scene)
+      mesh.material = this.ironMaterial
+      return mesh
+    })
+  }
+
+  getCrateTemplate(): Mesh {
+    return this.getMeshTemplate('crate', () => {
+      const mesh = MeshBuilder.CreateBox('tpl_crate', {
+        width: 0.45, height: 0.4, depth: 0.45
+      }, this.scene)
+      mesh.material = this.woodMaterial
+      return mesh
+    })
+  }
+
+  getCrateTopTemplate(): Mesh {
+    return this.getMeshTemplate('crateTop', () => {
+      const mesh = MeshBuilder.CreateBox('tpl_crateTop', {
+        width: 0.48, height: 0.04, depth: 0.48
+      }, this.scene)
+      mesh.material = this.darkWoodMaterial
+      return mesh
+    })
+  }
+
+  getTreeTrunkTemplate(): Mesh {
+    return this.getMeshTemplate('treeTrunk', () => {
+      const mesh = MeshBuilder.CreateCylinder('tpl_treeTrunk', {
+        height: 0.7, diameterTop: 0.18, diameterBottom: 0.26, tessellation: 6
+      }, this.scene)
+      mesh.material = this.trunkMaterial
+      return mesh
+    })
+  }
+
+  getTreeCanopyTemplate(): Mesh {
+    return this.getMeshTemplate('treeCanopy', () => {
+      const mesh = MeshBuilder.CreateCylinder('tpl_treeCanopy', {
+        height: 0.7, diameterTop: 0.2, diameterBottom: 1.0, tessellation: 6
+      }, this.scene)
+      mesh.material = this.greenCanopyMaterial
+      return mesh
+    })
+  }
+
+  getRockTemplate(): Mesh {
+    return this.getMeshTemplate('rock', () => {
+      const mesh = MeshBuilder.CreateSphere('tpl_rock', {
+        diameterX: 0.5, diameterY: 0.35, diameterZ: 0.45, segments: 6
+      }, this.scene)
+      mesh.material = this.rockMaterial
+      return mesh
+    })
+  }
+
+  getBushTemplate(): Mesh {
+    return this.getMeshTemplate('bush', () => {
+      const mesh = MeshBuilder.CreateSphere('tpl_bush', {
+        diameterX: 0.6, diameterY: 0.4, diameterZ: 0.6, segments: 8
+      }, this.scene)
+      mesh.material = this.bushMaterial
+      return mesh
+    })
   }
 
   // ============ Cleanup ============

@@ -177,8 +177,9 @@ export class Game {
     const startPos = tileToWorld(startTile)
 
     this.player = new Player(startPos, this.scene)
-    await this.player.init()
+    // Set height provider BEFORE init so character spawns at correct height
     this.player.setHeightProvider((tileX, tileY) => this.getTileHeightY(tileX, tileY))
+    await this.player.init()
 
     this.camera.follow(this.player.position, this.getHeightAtPosition(this.player.position))
   }
@@ -597,8 +598,9 @@ export class Game {
     if (this.remotePlayers.has(id)) return
 
     const remotePlayer = new RemotePlayer(position, name, this.scene)
-    await remotePlayer.init()
+    // Set height provider BEFORE init so character spawns at correct height
     remotePlayer.setHeightProvider((tileX, tileY) => this.getTileHeightY(tileX, tileY))
+    await remotePlayer.init()
     this.remotePlayers.set(id, remotePlayer)
   }
 
@@ -668,6 +670,11 @@ export class Game {
     this.chunkObjects.set(`${chunk.chunkX},${chunk.chunkY}`, ids)
     this.refreshNavigationGrid()
     this.camera.setPickableMeshes(this.tilemap.getTerrainMeshes())
+    // Refresh player heights in case terrain under them changed
+    this.player.refreshHeight()
+    for (const remotePlayer of this.remotePlayers.values()) {
+      remotePlayer.refreshHeight()
+    }
     if (!this.player.isMoving) {
       this.player.setPath([])
     }

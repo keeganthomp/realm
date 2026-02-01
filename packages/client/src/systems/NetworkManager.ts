@@ -11,6 +11,8 @@ export class NetworkManager {
   private room: Room | null = null
   private game: Game
   private sessionId: string = ''
+  // Track previous equipment state per remote player to avoid unnecessary updates
+  private remotePlayerEquipment: Map<string, string> = new Map()
 
   // Callbacks for React UI
   public onConnected?: () => void
@@ -193,9 +195,14 @@ export class NetworkManager {
               { x: player.x, y: player.y },
               player.direction as Direction
             )
-            // Sync equipment visuals when any property changes
+            // Only sync equipment if it actually changed
             const equipment = this.extractEquipmentFromPlayer(player)
-            this.game.updateRemotePlayerAllEquipment(sessionId, equipment)
+            const equipmentKey = JSON.stringify(equipment)
+            const prevEquipment = this.remotePlayerEquipment.get(sessionId)
+            if (equipmentKey !== prevEquipment) {
+              this.remotePlayerEquipment.set(sessionId, equipmentKey)
+              this.game.updateRemotePlayerAllEquipment(sessionId, equipment)
+            }
           }
         })
       }
@@ -227,6 +234,7 @@ export class NetworkManager {
 
       players.onRemove((_player: any, sessionId: string) => {
         this.game.removeRemotePlayer(sessionId)
+        this.remotePlayerEquipment.delete(sessionId) // Clean up tracked equipment
         this.updatePlayerList()
       })
     }

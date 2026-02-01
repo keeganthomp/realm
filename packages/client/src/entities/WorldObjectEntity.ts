@@ -2,7 +2,8 @@ import {
   Scene,
   TransformNode,
   MeshBuilder,
-  Mesh
+  Mesh,
+  InstancedMesh
 } from '@babylonjs/core'
 import { TextBlock } from '@babylonjs/gui'
 import { WorldObjectType, WORLD_OBJECT_DEFINITIONS, TILE_SIZE } from '@realm/shared'
@@ -15,7 +16,7 @@ export class WorldObjectEntity {
 
   private scene: Scene
   private node: TransformNode
-  private meshes: Mesh[] = []
+  private meshes: (Mesh | InstancedMesh)[] = []
 
   private x: number
   private y: number
@@ -40,6 +41,8 @@ export class WorldObjectEntity {
     this.createObject()
     this.createLabel()
     this.updateNodePosition()
+    // Note: Don't freeze here - height provider not set yet
+    // Meshes will be frozen in setHeightProvider after correct position is set
   }
 
   setHeightProvider(provider: (tileX: number, tileY: number) => number) {
@@ -48,6 +51,8 @@ export class WorldObjectEntity {
     this.cachedTileX = -1
     this.cachedTileY = -1
     this.updateNodePosition()
+    // Now that we have correct height, freeze meshes for performance
+    this.freezeMeshes()
   }
 
   private createObject() {
@@ -204,18 +209,16 @@ export class WorldObjectEntity {
   private createTree() {
     const res = SharedResources.get()
 
-    // Trunk (low-poly cylinder)
-    const trunk = MeshBuilder.CreateCylinder(
-      'trunk_' + this.id,
-      { height: 0.7, diameterTop: 0.18, diameterBottom: 0.26, tessellation: 6 },
-      this.scene
-    )
-    trunk.material = res.trunkMaterial
-    trunk.position.y = 0.35
-    trunk.parent = this.node
-    this.meshes.push(trunk)
+    // Initialize trunk template and create instance
+    res.getTreeTrunkTemplate()
+    const trunk = res.createMeshInstance('treeTrunk', this.id, this.node)
+    if (trunk) {
+      trunk.position.y = 0.35
+      this.meshes.push(trunk)
+    }
 
-    // Canopy - different colors for different tree types
+    // Canopy - different materials per tree type, so create individually
+    // (Could be further optimized with per-material templates if needed)
     let canopyMat = res.greenCanopyMaterial
     if (this.objectType === WorldObjectType.OAK_TREE) {
       canopyMat = res.oakCanopyMaterial
@@ -633,77 +636,58 @@ export class WorldObjectEntity {
   private createBarrel() {
     const res = SharedResources.get()
 
-    // Main barrel body
-    const body = MeshBuilder.CreateCylinder(
-      'barrelBody_' + this.id,
-      { height: 0.5, diameterTop: 0.35, diameterBottom: 0.35, tessellation: 12 },
-      this.scene
-    )
-    body.material = res.woodMaterial
-    body.position.y = 0.25
-    body.parent = this.node
-    this.meshes.push(body)
+    // Initialize templates (creates once, reuses thereafter)
+    res.getBarrelBodyTemplate()
+    res.getBarrelBulgeTemplate()
+    res.getBarrelBandTemplate()
 
-    // Middle bulge (barrels are wider in the middle)
-    const bulge = MeshBuilder.CreateCylinder(
-      'barrelBulge_' + this.id,
-      { height: 0.2, diameter: 0.4, tessellation: 12 },
-      this.scene
-    )
-    bulge.material = res.woodMaterial
-    bulge.position.y = 0.25
-    bulge.parent = this.node
-    this.meshes.push(bulge)
+    // Create instances from templates
+    const body = res.createMeshInstance('barrelBody', this.id, this.node)
+    if (body) {
+      body.position.y = 0.25
+      this.meshes.push(body)
+    }
 
-    // Metal band top
-    const bandTop = MeshBuilder.CreateTorus(
-      'barrelBandTop_' + this.id,
-      { diameter: 0.36, thickness: 0.02, tessellation: 12 },
-      this.scene
-    )
-    bandTop.material = res.ironMaterial
-    bandTop.rotation.x = Math.PI / 2
-    bandTop.position.y = 0.45
-    bandTop.parent = this.node
-    this.meshes.push(bandTop)
+    const bulge = res.createMeshInstance('barrelBulge', this.id + '_bulge', this.node)
+    if (bulge) {
+      bulge.position.y = 0.25
+      this.meshes.push(bulge)
+    }
 
-    // Metal band bottom
-    const bandBottom = MeshBuilder.CreateTorus(
-      'barrelBandBottom_' + this.id,
-      { diameter: 0.36, thickness: 0.02, tessellation: 12 },
-      this.scene
-    )
-    bandBottom.material = res.ironMaterial
-    bandBottom.rotation.x = Math.PI / 2
-    bandBottom.position.y = 0.05
-    bandBottom.parent = this.node
-    this.meshes.push(bandBottom)
+    const bandTop = res.createMeshInstance('barrelBand', this.id + '_top', this.node)
+    if (bandTop) {
+      bandTop.rotation.x = Math.PI / 2
+      bandTop.position.y = 0.45
+      this.meshes.push(bandTop)
+    }
+
+    const bandBottom = res.createMeshInstance('barrelBand', this.id + '_bottom', this.node)
+    if (bandBottom) {
+      bandBottom.rotation.x = Math.PI / 2
+      bandBottom.position.y = 0.05
+      this.meshes.push(bandBottom)
+    }
   }
 
   private createCrate() {
     const res = SharedResources.get()
 
-    // Simple wooden crate
-    const crate = MeshBuilder.CreateBox(
-      'crate_' + this.id,
-      { width: 0.45, height: 0.4, depth: 0.45 },
-      this.scene
-    )
-    crate.material = res.woodMaterial
-    crate.position.y = 0.2
-    crate.parent = this.node
-    this.meshes.push(crate)
+    // Initialize templates
+    res.getCrateTemplate()
+    res.getCrateTopTemplate()
 
-    // Top edge (darker wood)
-    const topEdge = MeshBuilder.CreateBox(
-      'crateTop_' + this.id,
-      { width: 0.48, height: 0.04, depth: 0.48 },
-      this.scene
-    )
-    topEdge.material = res.darkWoodMaterial
-    topEdge.position.y = 0.42
-    topEdge.parent = this.node
-    this.meshes.push(topEdge)
+    // Create instances
+    const crate = res.createMeshInstance('crate', this.id, this.node)
+    if (crate) {
+      crate.position.y = 0.2
+      this.meshes.push(crate)
+    }
+
+    const topEdge = res.createMeshInstance('crateTop', this.id + '_top', this.node)
+    if (topEdge) {
+      topEdge.position.y = 0.42
+      this.meshes.push(topEdge)
+    }
   }
 
   private createAnvil() {
@@ -910,32 +894,26 @@ export class WorldObjectEntity {
   private createBush() {
     const res = SharedResources.get()
 
-    // Squashed sphere
-    const bush = MeshBuilder.CreateSphere(
-      'bush_' + this.id,
-      { diameterX: 0.6, diameterY: 0.4, diameterZ: 0.6, segments: 8 },
-      this.scene
-    )
-    bush.material = res.bushMaterial
-    bush.position.y = 0.2
-    bush.parent = this.node
-    this.meshes.push(bush)
+    // Initialize template and create instance
+    res.getBushTemplate()
+    const bush = res.createMeshInstance('bush', this.id, this.node)
+    if (bush) {
+      bush.position.y = 0.2
+      this.meshes.push(bush)
+    }
   }
 
   private createRock() {
     const res = SharedResources.get()
 
-    // Irregular-looking sphere (using icosphere for more natural look)
-    const rock = MeshBuilder.CreateSphere(
-      'rock_' + this.id,
-      { diameterX: 0.5, diameterY: 0.35, diameterZ: 0.45, segments: 6 },
-      this.scene
-    )
-    rock.material = res.rockMaterial
-    rock.position.y = 0.15
-    rock.rotation.y = Math.random() * Math.PI * 2 // Random rotation
-    rock.parent = this.node
-    this.meshes.push(rock)
+    // Initialize template and create instance
+    res.getRockTemplate()
+    const rock = res.createMeshInstance('rock', this.id, this.node)
+    if (rock) {
+      rock.position.y = 0.15
+      rock.rotation.y = Math.random() * Math.PI * 2 // Random rotation per instance
+      this.meshes.push(rock)
+    }
   }
 
   // ============ ORE ROCKS ============
@@ -1771,6 +1749,23 @@ export class WorldObjectEntity {
     this.meshes = []
   }
 
+  /**
+   * Freeze world matrices on all meshes for performance (static objects)
+   * Must compute world matrices first to ensure parent transforms are propagated
+   */
+  private freezeMeshes() {
+    // Only freeze if height provider is set (position is correct)
+    if (!this.heightProvider) return
+
+    // Force parent world matrix computation first
+    this.node.computeWorldMatrix(true)
+    // Then compute and freeze each child mesh
+    for (const mesh of this.meshes) {
+      mesh.computeWorldMatrix(true)
+      mesh.freezeWorldMatrix()
+    }
+  }
+
   private updateNodePosition() {
     const scale = 1 / TILE_SIZE
     const tileX = Math.floor(this.x / TILE_SIZE)
@@ -1795,6 +1790,8 @@ export class WorldObjectEntity {
     if (this.depleted !== depleted) {
       this.depleted = depleted
       this.createObject()
+      // Re-freeze meshes after recreation
+      this.freezeMeshes()
     }
   }
 
