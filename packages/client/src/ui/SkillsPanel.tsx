@@ -2,7 +2,6 @@ import { useState } from 'react'
 import {
   SkillType,
   SKILL_DEFINITIONS,
-  SKILL_CATEGORIES,
   getLevelFromXp,
   getLevelProgress,
   getXpForLevel,

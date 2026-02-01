@@ -26,7 +26,19 @@ export enum ItemType {
 
   // Fishing bait/equipment (stackable)
   FEATHERS = 'feathers',
-  FISHING_BAIT = 'fishing_bait'
+  FISHING_BAIT = 'fishing_bait',
+
+  // Combat drops
+  BONES = 'bones',
+  COWHIDE = 'cowhide',
+
+  // Raw meat
+  RAW_CHICKEN = 'raw_chicken',
+  RAW_BEEF = 'raw_beef',
+
+  // Cooked meat
+  COOKED_CHICKEN = 'cooked_chicken',
+  COOKED_BEEF = 'cooked_beef'
 }
 
 export interface ItemDefinition {
@@ -153,6 +165,54 @@ export const ITEM_DEFINITIONS: Record<ItemType, ItemDefinition> = {
     description: 'Oops...',
     stackable: false,
     value: 0
+  },
+
+  // Combat drops
+  [ItemType.BONES]: {
+    type: ItemType.BONES,
+    name: 'Bones',
+    description: 'Bury these for Prayer XP',
+    stackable: false,
+    value: 1
+  },
+  [ItemType.COWHIDE]: {
+    type: ItemType.COWHIDE,
+    name: 'Cowhide',
+    description: 'Can be tanned into leather',
+    stackable: false,
+    value: 10
+  },
+
+  // Raw meat
+  [ItemType.RAW_CHICKEN]: {
+    type: ItemType.RAW_CHICKEN,
+    name: 'Raw Chicken',
+    description: 'Needs to be cooked',
+    stackable: false,
+    value: 5
+  },
+  [ItemType.RAW_BEEF]: {
+    type: ItemType.RAW_BEEF,
+    name: 'Raw Beef',
+    description: 'Needs to be cooked',
+    stackable: false,
+    value: 5
+  },
+
+  // Cooked meat
+  [ItemType.COOKED_CHICKEN]: {
+    type: ItemType.COOKED_CHICKEN,
+    name: 'Cooked Chicken',
+    description: 'Heals 3 HP',
+    stackable: false,
+    value: 10
+  },
+  [ItemType.COOKED_BEEF]: {
+    type: ItemType.COOKED_BEEF,
+    name: 'Cooked Beef',
+    description: 'Heals 3 HP',
+    stackable: false,
+    value: 10
   }
 }
 
@@ -161,5 +221,12 @@ export const FOOD_HEALING: Partial<Record<ItemType, number>> = {
   [ItemType.COOKED_SHRIMP]: 3,
   [ItemType.COOKED_TROUT]: 7,
   [ItemType.COOKED_SALMON]: 9,
-  [ItemType.COOKED_LOBSTER]: 12
+  [ItemType.COOKED_LOBSTER]: 12,
+  [ItemType.COOKED_CHICKEN]: 3,
+  [ItemType.COOKED_BEEF]: 3
+}
+
+// Check if an item is edible
+export function isFood(itemType: ItemType): boolean {
+  return FOOD_HEALING[itemType] !== undefined
 }

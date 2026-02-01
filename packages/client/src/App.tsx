@@ -10,6 +10,7 @@ import { BankPanel } from './ui/BankPanel'
 import { ActionProgress } from './ui/ActionProgress'
 import { Notifications, useNotifications } from './ui/Notifications'
 import { LoadingScreen } from './ui/LoadingScreen'
+import { HealthBar } from './ui/HealthBar'
 
 export function App() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -33,6 +34,11 @@ export function App() {
     action: string
     startTime: number
   } | null>(null)
+
+  // Combat state
+  const [currentHp, setCurrentHp] = useState(10)
+  const [maxHp, setMaxHp] = useState(10)
+  const [inCombat, setInCombat] = useState(false)
 
   // Store selected item index in ref for use in callbacks
   const selectedItemIndexRef = useRef<number | null>(null)
@@ -107,10 +113,7 @@ export function App() {
       network.onInventoryChanged = (items) => {
         setInventory([...items])
         // Clear selection if item at that index is gone
-        if (
-          selectedItemIndexRef.current !== null &&
-          selectedItemIndexRef.current >= items.length
-        ) {
+        if (selectedItemIndexRef.current !== null && selectedItemIndexRef.current >= items.length) {
           setSelectedItemIndex(null)
         }
       }
@@ -127,6 +130,15 @@ export function App() {
 
       network.onActionError = (message) => {
         showErrorRef.current(message)
+        setCurrentAction(null)
+      }
+
+      network.onActionCancelled = () => {
+        setCurrentAction(null)
+      }
+
+      network.onDisengage = () => {
+        setInCombat(false)
         setCurrentAction(null)
       }
 
@@ -170,6 +182,33 @@ export function App() {
         setIsBankOpen(true)
       }
 
+      // Combat callbacks
+      network.onHealthChanged = (hp, max) => {
+        setCurrentHp(hp)
+        setMaxHp(max)
+      }
+
+      network.onCombatStarted = () => {
+        setInCombat(true)
+      }
+
+      network.onCombatEnded = () => {
+        setInCombat(false)
+      }
+
+      network.onPlayerDied = () => {
+        setInCombat(false)
+        showErrorRef.current('You have died!')
+      }
+
+      network.onNpcAggro = (npcId) => {
+        setInCombat(true)
+        setMessages((prev) => [
+          ...prev.slice(-50),
+          { sender: 'System', text: `You are under attack!` }
+        ])
+      }
+
       // Connect to server
       await network.connect()
 
@@ -209,6 +248,10 @@ export function App() {
     setIsBankOpen(false)
   }, [])
 
+  const handleEatFood = useCallback((index: number) => {
+    networkRef.current?.eatFood(index)
+  }, [])
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       {/* Loading Screen */}
@@ -230,6 +273,9 @@ export function App() {
             overflow: 'hidden'
           }}
         >
+          {/* Top center - Health bar */}
+          <HealthBar currentHp={currentHp} maxHp={maxHp} />
+
           {/* Top left - Player list */}
           <PlayerList players={players} />
 
@@ -251,6 +297,7 @@ export function App() {
               selectedIndex={selectedItemIndex}
               onSelectItem={handleSelectItem}
               onDropItem={handleDropItem}
+              onEatFood={handleEatFood}
             />
           </div>
 
@@ -263,13 +310,15 @@ export function App() {
           <ChatPanel messages={messages} onSend={handleSendMessage} />
 
           {/* Center - Action progress */}
-          {currentAction && (
+          {currentAction ? (
             <ActionProgress
               key={currentAction.startTime}
               duration={currentAction.duration}
               action={currentAction.action}
             />
-          )}
+          ) : inCombat ? (
+            <ActionProgress key="combat" duration={900} action="Attacking" loop />
+          ) : null}
 
           {/* Center - Notifications */}
           <Notifications notifications={notifications} />

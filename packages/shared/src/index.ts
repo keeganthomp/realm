@@ -74,3 +74,5 @@ export function getDirection(from: Position, to: Position): Direction {
 export * from './skills'
 export * from './items'
 export * from './worldObjects'
+export * from './npcs'
+export * from './combat'

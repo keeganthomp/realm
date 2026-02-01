@@ -30,4 +30,11 @@ export class Player extends Schema {
 
   // Current action being performed
   @type(CurrentAction) currentAction: CurrentAction | null = null
+
+  // Combat stats
+  @type('number') currentHp: number = 10
+  @type('number') maxHp: number = 10
+  @type('string') combatTargetId: string = '' // NPC id being attacked
+  @type('number') lastAttackTime: number = 0
+  @type('string') combatStyle: string = 'aggressive' // accurate, aggressive, defensive
 }

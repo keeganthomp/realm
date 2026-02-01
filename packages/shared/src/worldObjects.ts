@@ -145,6 +145,20 @@ export const COOKING_RECIPES: CookingRecipe[] = [
     burnStopLevel: 34
   },
   {
+    raw: ItemType.RAW_CHICKEN,
+    cooked: ItemType.COOKED_CHICKEN,
+    levelRequired: 1,
+    xpGain: 30,
+    burnStopLevel: 34
+  },
+  {
+    raw: ItemType.RAW_BEEF,
+    cooked: ItemType.COOKED_BEEF,
+    levelRequired: 1,
+    xpGain: 30,
+    burnStopLevel: 34
+  },
+  {
     raw: ItemType.RAW_TROUT,
     cooked: ItemType.COOKED_TROUT,
     levelRequired: 15,

@@ -3,22 +3,24 @@ import { useEffect, useState, useRef } from 'react'
 interface ActionProgressProps {
   duration: number
   action: string
+  loop?: boolean
 }
 
-export function ActionProgress({ duration, action }: ActionProgressProps) {
+export function ActionProgress({ duration, action, loop = false }: ActionProgressProps) {
   const [progress, setProgress] = useState(0)
-  const startTimeRef = useRef(performance.now())
+  const startTimeRef = useRef(window.performance.now())
   const rafRef = useRef<number>(0)
 
   useEffect(() => {
-    startTimeRef.current = performance.now()
+    startTimeRef.current = window.performance.now()
 
     const animate = () => {
-      const elapsed = performance.now() - startTimeRef.current
-      const newProgress = Math.min(elapsed / duration, 1)
+      const elapsed = window.performance.now() - startTimeRef.current
+      const rawProgress = elapsed / duration
+      const newProgress = loop ? rawProgress % 1 : Math.min(rawProgress, 1)
       setProgress(newProgress)
 
-      if (newProgress < 1) {
+      if (loop || newProgress < 1) {
         rafRef.current = requestAnimationFrame(animate)
       }
     }

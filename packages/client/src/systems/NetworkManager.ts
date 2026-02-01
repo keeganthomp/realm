@@ -1,7 +1,7 @@
 import { Client, Room } from '@colyseus/sdk'
 import type { Game } from '../Game'
 import type { Position } from '@realm/shared'
-import { Direction, WorldObjectType } from '@realm/shared'
+import { Direction, WorldObjectType, NpcType } from '@realm/shared'
 
 const DEFAULT_SERVER_URL = import.meta.env.DEV ? 'http://localhost:2567' : window.location.origin
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? DEFAULT_SERVER_URL
@@ -23,12 +23,32 @@ export class NetworkManager {
   public onActionStarted?: (duration: number, action: string) => void
   public onActionComplete?: (xpGained: number, skill: string, itemGained: string) => void
   public onActionError?: (message: string) => void
+  public onActionCancelled?: () => void
+  public onDisengage?: () => void
   public onInventoryChanged?: (items: Array<{ itemType: string; quantity: number }>) => void
   public onItemDropped?: (itemType: string, quantity: number) => void
   public onBankOpened?: (items: Array<{ itemType: string; quantity: number }>) => void
 
+  // Combat callbacks
+  public onHealthChanged?: (currentHp: number, maxHp: number) => void
+  public onCombatStarted?: (targetId: string) => void
+  public onCombatEnded?: () => void
+  public onCombatHit?: (
+    attackerId: string,
+    targetId: string,
+    damage: number,
+    targetHp: number,
+    targetMaxHp: number
+  ) => void
+  public onNpcDied?: (npcId: string, killerName: string) => void
+  public onPlayerDied?: (respawnX: number, respawnY: number) => void
+  public onNpcAggro?: (npcId: string) => void
+
   // Callback for when a world object is clicked (can be overridden by App)
   public onWorldObjectClicked?: (objectId: string) => void
+
+  // Callback for when an NPC is clicked
+  public onNpcClicked?: (npcId: string) => void
 
   constructor(game: Game) {
     this.game = game
@@ -45,6 +65,14 @@ export class NetworkManager {
         this.onWorldObjectClicked(objectId)
       } else {
         this.startAction(objectId)
+      }
+    }
+
+    this.game.onNpcClick = (npcId) => {
+      if (this.onNpcClicked) {
+        this.onNpcClicked(npcId)
+      } else {
+        this.attackNpc(npcId)
       }
     }
   }
@@ -194,17 +222,29 @@ export class NetworkManager {
     // Action messages
     this.room.onMessage('actionStarted', (data: { duration: number; action: string }) => {
       this.onActionStarted?.(data.duration, data.action)
+      this.game.setSkillingAction(data.action)
+      this.game.setPlayerAction(true)
+    })
+
+    this.room.onMessage('actionCancelled', () => {
+      this.onActionCancelled?.()
+      this.game.setSkillingAction(null)
+      this.game.setPlayerAction(false)
     })
 
     this.room.onMessage(
       'actionComplete',
       (data: { xpGained: number; skill: string; itemGained: string }) => {
         this.onActionComplete?.(data.xpGained, data.skill, data.itemGained)
+        this.game.setSkillingAction(null)
+        this.game.setPlayerAction(false)
       }
     )
 
     this.room.onMessage('actionError', (data: { message: string }) => {
       this.onActionError?.(data.message)
+      this.game.setSkillingAction(null)
+      this.game.setPlayerAction(false)
     })
 
     this.room.onMessage('itemDropped', (data: { itemType: string; quantity: number }) => {
@@ -256,6 +296,8 @@ export class NetworkManager {
         y: number
         skills: Record<string, number>
         inventory: Array<{ itemType: string; quantity: number }>
+        currentHp?: number
+        maxHp?: number
       }) => {
         if (data.sessionId === this.sessionId) {
           this.game.setLocalPlayerPosition({ x: data.x, y: data.y })
@@ -267,6 +309,10 @@ export class NetworkManager {
           this.onSkillsChanged?.(skills)
 
           this.onInventoryChanged?.(data.inventory)
+
+          if (data.currentHp !== undefined && data.maxHp !== undefined) {
+            this.onHealthChanged?.(data.currentHp, data.maxHp)
+          }
         }
       }
     )
@@ -284,6 +330,107 @@ export class NetworkManager {
         }
         this.onSkillsChanged?.(skills)
         this.onInventoryChanged?.(data.inventory)
+      }
+    )
+
+    // NPCs sent on join
+    this.room.onMessage(
+      'npcs',
+      (
+        data: Array<{
+          id: string
+          npcType: string
+          x: number
+          y: number
+          currentHp: number
+          maxHp: number
+          isDead: boolean
+        }>
+      ) => {
+        for (const npc of data) {
+          this.game.addNpc(npc.id, npc.npcType as NpcType, npc.x, npc.y, npc.currentHp, npc.maxHp)
+          if (npc.isDead) {
+            this.game.setNpcDead(npc.id, true)
+          }
+        }
+      }
+    )
+
+    // Combat messages
+    this.room.onMessage('combatStarted', (data: { targetId: string }) => {
+      this.onCombatStarted?.(data.targetId)
+      this.game.setCombatTarget(data.targetId)
+    })
+
+    this.room.onMessage('combatEnded', () => {
+      this.onCombatEnded?.()
+      this.game.setCombatTarget(null)
+    })
+
+    this.room.onMessage(
+      'combatHit',
+      (data: {
+        attackerId: string
+        targetId: string
+        damage: number
+        targetHp: number
+        targetMaxHp: number
+      }) => {
+        // Show hit splat on NPC if they're the target
+        if (data.targetId.includes('_')) {
+          // NPC IDs have underscores (chicken_0, cow_1, etc)
+          this.game.showNpcHitSplat(data.targetId, data.damage)
+          this.game.updateNpcHealth(data.targetId, data.targetHp, data.targetMaxHp)
+        }
+
+        // Update player health if player is target
+        if (data.targetId === this.sessionId) {
+          this.onHealthChanged?.(data.targetHp, data.targetMaxHp)
+        }
+
+        this.onCombatHit?.(
+          data.attackerId,
+          data.targetId,
+          data.damage,
+          data.targetHp,
+          data.targetMaxHp
+        )
+      }
+    )
+
+    this.room.onMessage(
+      'npcDied',
+      (data: {
+        npcId: string
+        killerName: string
+        drops: Array<{ itemType: string; quantity: number }>
+      }) => {
+        this.game.setNpcDead(data.npcId, true)
+        this.onNpcDied?.(data.npcId, data.killerName)
+      }
+    )
+
+    this.room.onMessage('npcRespawned', (data: { npcId: string }) => {
+      this.game.setNpcDead(data.npcId, false)
+    })
+
+    this.room.onMessage(
+      'playerDied',
+      (data: { respawnX: number; respawnY: number; currentHp: number; maxHp: number }) => {
+        this.game.setLocalPlayerPosition({ x: data.respawnX, y: data.respawnY })
+        this.onHealthChanged?.(data.currentHp, data.maxHp)
+        this.onPlayerDied?.(data.respawnX, data.respawnY)
+      }
+    )
+
+    this.room.onMessage('npcAggro', (data: { npcId: string }) => {
+      this.onNpcAggro?.(data.npcId)
+    })
+
+    this.room.onMessage(
+      'healthUpdate',
+      (data: { currentHp: number; maxHp: number; healAmount: number }) => {
+        this.onHealthChanged?.(data.currentHp, data.maxHp)
       }
     )
 
@@ -332,7 +479,11 @@ export class NetworkManager {
 
   sendMovement(position: Position, path: Position[]) {
     if (!this.room) return
-    this.room.send('move', { x: position.x, y: position.y, path })
+    this.onActionCancelled?.()
+    this.onDisengage?.()
+    const finalPos = path.length > 0 ? path[path.length - 1] : position
+    this.room.send('move', { x: finalPos.x, y: finalPos.y, path })
+    this.room.send('flee', {})
   }
 
   startAction(objectId: string) {
@@ -368,6 +519,26 @@ export class NetworkManager {
   bankWithdraw(bankSlot: number, quantity: number = 1) {
     if (!this.room) return
     this.room.send('bankWithdraw', { bankSlot, quantity })
+  }
+
+  attackNpc(npcId: string) {
+    if (!this.room) return
+    this.room.send('attackNpc', { npcId })
+  }
+
+  eatFood(itemIndex: number) {
+    if (!this.room) return
+    this.room.send('eatFood', { itemIndex })
+  }
+
+  flee() {
+    if (!this.room) return
+    this.room.send('flee', {})
+  }
+
+  setCombatStyle(style: string) {
+    if (!this.room) return
+    this.room.send('setCombatStyle', { style })
   }
 
   disconnect() {

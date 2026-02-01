@@ -15,7 +15,6 @@
     "@babylonjs/loaders": "^7.37.0",
     "@colyseus/sdk": "^0.17.25",
     "@realm/shared": "workspace:*",
-    "easystarjs": "^0.4.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

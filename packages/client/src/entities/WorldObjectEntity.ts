@@ -26,9 +26,11 @@ export class WorldObjectEntity {
 
   private x: number
   private y: number
+  private heightProvider: ((tileX: number, tileY: number) => number) | null = null
 
   private guiTexture: AdvancedDynamicTexture | null = null
   private label: TextBlock | null = null
+  private isHovered: boolean = false
 
   constructor(id: string, objectType: WorldObjectType, x: number, y: number, scene: Scene) {
     this.id = id
@@ -40,6 +42,10 @@ export class WorldObjectEntity {
 
     this.createObject()
     this.createLabel()
+    this.updateNodePosition()
+  }
+  setHeightProvider(provider: (tileX: number, tileY: number) => number) {
+    this.heightProvider = provider
     this.updateNodePosition()
   }
 
@@ -131,7 +137,10 @@ export class WorldObjectEntity {
     this.particles = new ParticleSystem('bubbles_' + this.id, 20, this.scene)
 
     // Create a simple white texture for particles
-    const particleTexture = new Texture('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABMSURBVChTY/z//z8DAwMDAxMQsAIxGxCzAwELELMCMRsQswMBCxCzAjEbELMDAQsQswIxGxCzAwELELMCMRsQswMBCxCzAjEbKWBgAAAS7QXPpqV9IQAAAABJRU5ErkJggg==', this.scene)
+    const particleTexture = new Texture(
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABMSURBVChTY/z//z8DAwMDAxMQsAIxGxCzAwELELMCMRsQswMBCxCzAjEbELMDAQsQswIxGxCzAwELELMCMRsQswMBCxCzAjEbKWBgAAAS7QXPpqV9IQAAAABJRU5ErkJggg==',
+      this.scene
+    )
     this.particles.particleTexture = particleTexture
 
     this.particles.emitter = new Vector3(0, 0.1, 0)
@@ -354,6 +363,18 @@ export class WorldObjectEntity {
     this.label.linkOffsetY = -50
   }
 
+  setHovered(isHovered: boolean) {
+    this.isHovered = isHovered
+    if (this.label) {
+      this.label.isVisible = isHovered && !this.depleted
+    }
+    for (const mesh of this.meshes) {
+      mesh.renderOutline = isHovered
+      mesh.outlineWidth = 0.05
+      mesh.outlineColor = new Color3(1, 1, 1)
+    }
+  }
+
   private clearMeshes() {
     for (const mesh of this.meshes) {
       mesh.dispose()
@@ -374,7 +395,10 @@ export class WorldObjectEntity {
   private updateNodePosition() {
     // Map 2D position to 3D: x stays x, y becomes z
     const scale = 1 / TILE_SIZE
-    this.node.position = new Vector3(this.x * scale, 0, this.y * scale)
+    const tileX = Math.floor(this.x / TILE_SIZE)
+    const tileY = Math.floor(this.y / TILE_SIZE)
+    const heightY = this.heightProvider ? this.heightProvider(tileX, tileY) : 0
+    this.node.position = new Vector3(this.x * scale, heightY, this.y * scale)
   }
 
   getPosition(): { x: number; y: number } {

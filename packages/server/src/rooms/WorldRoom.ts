@@ -2,8 +2,10 @@ import { Room, Client } from '@colyseus/core'
 import { WorldState } from '../schemas/WorldState'
 import { Player, SkillData, InventoryItem, CurrentAction } from '../schemas/Player'
 import { WorldObject } from '../schemas/WorldObject'
+import { NPC } from '../schemas/NPC'
 import {
   tileToWorld,
+  worldToTile,
   Direction,
   SkillType,
   getInitialSkills,
@@ -13,19 +15,30 @@ import {
   COOKING_RECIPES,
   getBurnChance,
   ItemType,
-  ITEM_DEFINITIONS
+  ITEM_DEFINITIONS,
+  FOOD_HEALING,
+  NpcType,
+  NPC_DEFINITIONS,
+  rollDrops,
+  CombatStyle,
+  COMBAT_TICK_MS,
+  calculateHitChance,
+  calculateMaxHit,
+  rollDamage,
+  calculateCombatXp,
+  calculateMaxHp
 } from '@realm/shared'
 import {
   getOrCreatePlayer,
   savePlayerSkills,
   savePlayerInventory,
-  savePlayerBank,
-  PlayerData
+  savePlayerBank
 } from '../database'
 
 const MAX_INVENTORY_SIZE = 28
 
 const MAX_BANK_SIZE = 100
+const SPAWN_POINT = { tileX: 12, tileY: 10 } // Default respawn location
 
 export class WorldRoom extends Room {
   state!: WorldState
@@ -34,6 +47,7 @@ export class WorldRoom extends Room {
   private playerDbIds: Map<string, number> = new Map() // sessionId -> database player id
   private pendingSaves: Set<string> = new Set() // sessionIds with unsaved changes
   private playerBanks: Map<string, Array<{ itemType: string; quantity: number }>> = new Map()
+  private combatInterval: { clear: () => void } | null = null
 
   onCreate() {
     console.log('=== onCreate called ===', { roomId: this.roomId })
@@ -41,7 +55,11 @@ export class WorldRoom extends Room {
       this.setState(new WorldState())
       // Spawn initial world objects
       this.spawnWorldObjects()
-      console.log(`WorldRoom created with ${this.state.worldObjects.size} world objects`)
+      // Spawn NPCs
+      this.spawnNpcs()
+      console.log(
+        `WorldRoom created with ${this.state.worldObjects.size} world objects and ${this.state.npcs.size} NPCs`
+      )
     } catch (error) {
       console.error('Error in onCreate:', error)
       throw error
@@ -53,7 +71,7 @@ export class WorldRoom extends Room {
       if (!player) return
 
       // Cancel current action if moving
-      this.cancelAction(client.sessionId)
+      this.cancelAction(client.sessionId, true)
 
       player.x = data.x
       player.y = data.y
@@ -112,7 +130,31 @@ export class WorldRoom extends Room {
       })
     })
 
-    // Respawn tick - check for depleted objects to respawn
+    // Handle attacking an NPC
+    this.onMessage('attackNpc', (client, data: { npcId: string }) => {
+      this.handleAttackNpc(client, data.npcId)
+    })
+
+    // Handle eating food
+    this.onMessage('eatFood', (client, data: { itemIndex: number }) => {
+      this.handleEatFood(client, data.itemIndex)
+    })
+
+    // Handle fleeing from combat
+    this.onMessage('flee', (client) => {
+      this.handleFlee(client)
+    })
+
+    // Handle setting combat style
+    this.onMessage('setCombatStyle', (client, data: { style: string }) => {
+      const player = this.state.players.get(client.sessionId)
+      if (!player) return
+      if (['accurate', 'aggressive', 'defensive'].includes(data.style)) {
+        player.combatStyle = data.style
+      }
+    })
+
+    // Respawn tick - check for depleted objects and dead NPCs to respawn
     this.clock.setInterval(() => {
       const now = Date.now()
       this.state.worldObjects.forEach((obj: WorldObject, id: string) => {
@@ -123,7 +165,19 @@ export class WorldRoom extends Room {
           this.broadcast('objectUpdate', { id, depleted: false })
         }
       })
+
+      // NPC respawn
+      this.state.npcs.forEach((npc: NPC) => {
+        if (npc.isDead && npc.respawnAt > 0 && now >= npc.respawnAt) {
+          this.respawnNpc(npc)
+        }
+      })
     }, 1000)
+
+    // Combat tick - process all combat
+    this.combatInterval = this.clock.setInterval(() => {
+      this.processCombatTick()
+    }, COMBAT_TICK_MS)
 
     // Auto-save tick - save pending player data every 30 seconds
     this.clock.setInterval(() => {
@@ -223,6 +277,97 @@ export class WorldRoom extends Room {
     console.log(`Spawned ${objectId} world objects`)
   }
 
+  private spawnNpcs() {
+    let npcId = 0
+
+    // Chickens near starting area
+    const chickenLocations = [
+      { x: 8, y: 12 },
+      { x: 9, y: 13 },
+      { x: 10, y: 12 }
+    ]
+
+    for (const loc of chickenLocations) {
+      const npc = new NPC()
+      npc.id = `chicken_${npcId++}`
+      npc.npcType = NpcType.CHICKEN
+      const pos = tileToWorld({ tileX: loc.x, tileY: loc.y })
+      npc.x = pos.x
+      npc.y = pos.y
+      npc.spawnX = pos.x
+      npc.spawnY = pos.y
+      const def = NPC_DEFINITIONS[NpcType.CHICKEN]
+      npc.currentHp = def.hitpoints
+      npc.maxHp = def.hitpoints
+      npc.direction = Direction.DOWN
+      this.state.npcs.set(npc.id, npc)
+    }
+
+    // Cows in a different area
+    const cowLocations = [
+      { x: 28, y: 12 },
+      { x: 29, y: 13 },
+      { x: 30, y: 12 }
+    ]
+
+    for (const loc of cowLocations) {
+      const npc = new NPC()
+      npc.id = `cow_${npcId++}`
+      npc.npcType = NpcType.COW
+      const pos = tileToWorld({ tileX: loc.x, tileY: loc.y })
+      npc.x = pos.x
+      npc.y = pos.y
+      npc.spawnX = pos.x
+      npc.spawnY = pos.y
+      const def = NPC_DEFINITIONS[NpcType.COW]
+      npc.currentHp = def.hitpoints
+      npc.maxHp = def.hitpoints
+      npc.direction = Direction.DOWN
+      this.state.npcs.set(npc.id, npc)
+    }
+
+    // Goblins (aggressive) in a different area
+    const goblinLocations = [
+      { x: 35, y: 18 },
+      { x: 36, y: 19 }
+    ]
+
+    for (const loc of goblinLocations) {
+      const npc = new NPC()
+      npc.id = `goblin_${npcId++}`
+      npc.npcType = NpcType.GOBLIN
+      const pos = tileToWorld({ tileX: loc.x, tileY: loc.y })
+      npc.x = pos.x
+      npc.y = pos.y
+      npc.spawnX = pos.x
+      npc.spawnY = pos.y
+      const def = NPC_DEFINITIONS[NpcType.GOBLIN]
+      npc.currentHp = def.hitpoints
+      npc.maxHp = def.hitpoints
+      npc.direction = Direction.DOWN
+      this.state.npcs.set(npc.id, npc)
+    }
+
+    console.log(`Spawned ${npcId} NPCs`)
+  }
+
+  private respawnNpc(npc: NPC) {
+    const def = NPC_DEFINITIONS[npc.npcType as NpcType]
+    if (!def) return
+
+    npc.isDead = false
+    npc.respawnAt = 0
+    npc.currentHp = def.hitpoints
+    npc.maxHp = def.hitpoints
+    npc.x = npc.spawnX
+    npc.y = npc.spawnY
+    npc.targetId = ''
+    npc.lastAttackTime = 0
+
+    // Notify all clients
+    this.broadcast('npcRespawned', { npcId: npc.id })
+  }
+
   private handleStartAction(client: Client, objectId: string) {
     const player = this.state.players.get(client.sessionId)
     if (!player) return
@@ -230,6 +375,12 @@ export class WorldRoom extends Room {
     const worldObj = this.state.worldObjects.get(objectId)
     if (!worldObj || worldObj.depleted) {
       client.send('actionError', { message: 'Object not available' })
+      return
+    }
+
+    // Range check before any interaction
+    if (!this.isPlayerInRangeOfObject(player, worldObj)) {
+      client.send('actionError', { message: 'Too far away' })
       return
     }
 
@@ -259,7 +410,7 @@ export class WorldRoom extends Room {
     }
 
     // Cancel any existing action
-    this.cancelAction(client.sessionId)
+    this.cancelAction(client.sessionId, false)
 
     // Start the action
     const action = new CurrentAction()
@@ -296,6 +447,14 @@ export class WorldRoom extends Room {
     const objDef = WORLD_OBJECT_DEFINITIONS[worldObj.objectType as WorldObjectType]
     if (!objDef) {
       player.currentAction = null
+      return
+    }
+
+    // Ensure player is still in range
+    if (!this.isPlayerInRangeOfObject(player, worldObj)) {
+      player.currentAction = null
+      const client = this.clients.find((c) => c.sessionId === sessionId)
+      client?.send('actionError', { message: 'Too far away' })
       return
     }
 
@@ -353,7 +512,7 @@ export class WorldRoom extends Room {
     }
   }
 
-  private cancelAction(sessionId: string) {
+  private cancelAction(sessionId: string, notifyClient: boolean = false) {
     const timer = this.actionTimers.get(sessionId)
     if (timer) {
       clearTimeout(timer)
@@ -364,6 +523,20 @@ export class WorldRoom extends Room {
     if (player) {
       player.currentAction = null
     }
+
+    if (notifyClient) {
+      const client = this.clients.find((c) => c.sessionId === sessionId)
+      client?.send('actionCancelled', {})
+    }
+  }
+
+  private isPlayerInRangeOfObject(player: Player, worldObj: WorldObject, range: number = 1) {
+    const playerTile = worldToTile({ x: player.x, y: player.y })
+    const objTile = worldToTile({ x: worldObj.x, y: worldObj.y })
+    return (
+      Math.abs(playerTile.tileX - objTile.tileX) <= range &&
+      Math.abs(playerTile.tileY - objTile.tileY) <= range
+    )
   }
 
   /**
@@ -714,6 +887,394 @@ export class WorldRoom extends Room {
     this.sendStateUpdate(client.sessionId)
   }
 
+  // Combat methods
+  private handleAttackNpc(client: Client, npcId: string) {
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+
+    const npc = this.state.npcs.get(npcId)
+    if (!npc || npc.isDead) {
+      client.send('actionError', { message: 'Target not available' })
+      return
+    }
+
+    // Client validates adjacency before sending - update server position to be adjacent to NPC
+    // This fixes the stale position issue since we only track start of movement
+    const npcTile = worldToTile({ x: npc.x, y: npc.y })
+    const adjacentPos = tileToWorld({ tileX: npcTile.tileX, tileY: npcTile.tileY + 1 })
+    player.x = adjacentPos.x
+    player.y = adjacentPos.y
+
+    // Cancel any existing skilling action
+    this.cancelAction(client.sessionId)
+
+    // Start combat
+    player.combatTargetId = npcId
+
+    // NPC retaliates
+    if (!npc.targetId) {
+      npc.targetId = client.sessionId
+    }
+
+    client.send('combatStarted', { targetId: npcId })
+  }
+
+  private handleEatFood(client: Client, itemIndex: number) {
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+
+    // Validate item index
+    if (itemIndex < 0 || itemIndex >= player.inventory.length) {
+      client.send('actionError', { message: 'Invalid item' })
+      return
+    }
+
+    const item = player.inventory[itemIndex]
+    const healAmount = FOOD_HEALING[item.itemType as ItemType]
+
+    if (healAmount === undefined) {
+      client.send('actionError', { message: "That's not food" })
+      return
+    }
+
+    // Already at full HP
+    if (player.currentHp >= player.maxHp) {
+      client.send('actionError', { message: 'Already at full health' })
+      return
+    }
+
+    // Consume the food
+    if (item.quantity > 1) {
+      item.quantity -= 1
+    } else {
+      player.inventory.splice(itemIndex, 1)
+    }
+
+    // Heal
+    const oldHp = player.currentHp
+    player.currentHp = Math.min(player.currentHp + healAmount, player.maxHp)
+    const actualHeal = player.currentHp - oldHp
+
+    // Mark for save
+    this.pendingSaves.add(client.sessionId)
+
+    // Notify client
+    client.send('healthUpdate', {
+      currentHp: player.currentHp,
+      maxHp: player.maxHp,
+      healAmount: actualHeal
+    })
+
+    this.sendStateUpdate(client.sessionId)
+  }
+
+  private handleFlee(client: Client) {
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+
+    // Clear combat target
+    player.combatTargetId = ''
+
+    // If an NPC was targeting this player, clear its target
+    this.state.npcs.forEach((npc: NPC) => {
+      if (npc.targetId === client.sessionId) {
+        npc.targetId = ''
+      }
+    })
+
+    client.send('combatEnded', {})
+  }
+
+  private processCombatTick() {
+    const now = Date.now()
+
+    // Process player attacks on NPCs
+    this.state.players.forEach((player: Player, sessionId: string) => {
+      if (!player.combatTargetId) return
+
+      const npc = this.state.npcs.get(player.combatTargetId)
+      if (!npc || npc.isDead) {
+        player.combatTargetId = ''
+        const client = this.clients.find((c) => c.sessionId === sessionId)
+        client?.send('combatEnded', {})
+        return
+      }
+
+      // Check if enough time has passed for next attack (4 ticks = 2.4s for players)
+      if (now - player.lastAttackTime < COMBAT_TICK_MS * 4) return
+      player.lastAttackTime = now
+
+      // Get player combat stats
+      const attackXp = player.skills.get(SkillType.ATTACK)?.xp || 0
+      const strengthXp = player.skills.get(SkillType.STRENGTH)?.xp || 0
+      const attackLevel = getLevelFromXp(attackXp)
+      const strengthLevel = getLevelFromXp(strengthXp)
+
+      const npcDef = NPC_DEFINITIONS[npc.npcType as NpcType]
+      if (!npcDef) return
+
+      // Roll to hit
+      const didHit = calculateHitChance(attackLevel, strengthLevel, npcDef.defenceLevel)
+
+      let damage = 0
+      if (didHit) {
+        const maxHit = calculateMaxHit(strengthLevel)
+        damage = rollDamage(maxHit)
+      }
+
+      // Apply damage
+      npc.currentHp = Math.max(0, npc.currentHp - damage)
+
+      // Grant XP
+      if (damage > 0) {
+        const xpResult = calculateCombatXp(damage, player.combatStyle as CombatStyle)
+
+        // Grant combat skill XP
+        const combatSkillData = player.skills.get(xpResult.skill)
+        if (combatSkillData) {
+          const oldLevel = getLevelFromXp(combatSkillData.xp)
+          combatSkillData.xp += xpResult.combatXp
+          const newLevel = getLevelFromXp(combatSkillData.xp)
+
+          if (newLevel > oldLevel) {
+            this.broadcast('levelUp', {
+              playerName: player.name,
+              skill: xpResult.skill,
+              newLevel
+            })
+          }
+        }
+
+        // Grant hitpoints XP
+        const hpSkillData = player.skills.get(SkillType.HITPOINTS)
+        if (hpSkillData) {
+          const oldLevel = getLevelFromXp(hpSkillData.xp)
+          hpSkillData.xp += Math.floor(xpResult.hitpointsXp)
+          const newLevel = getLevelFromXp(hpSkillData.xp)
+
+          // Update max HP
+          player.maxHp = calculateMaxHp(newLevel)
+
+          if (newLevel > oldLevel) {
+            this.broadcast('levelUp', {
+              playerName: player.name,
+              skill: SkillType.HITPOINTS,
+              newLevel
+            })
+          }
+        }
+
+        this.pendingSaves.add(sessionId)
+      }
+
+      // Notify clients of hit
+      const client = this.clients.find((c) => c.sessionId === sessionId)
+      client?.send('combatHit', {
+        attackerId: sessionId,
+        targetId: npc.id,
+        damage,
+        targetHp: npc.currentHp,
+        targetMaxHp: npc.maxHp
+      })
+
+      // Check if NPC died
+      if (npc.currentHp <= 0) {
+        this.handleNpcDeath(npc, sessionId)
+      }
+    })
+
+    // Process NPC attacks on players
+    this.state.npcs.forEach((npc: NPC) => {
+      if (npc.isDead || !npc.targetId) return
+
+      const player = this.state.players.get(npc.targetId)
+      if (!player) {
+        npc.targetId = ''
+        return
+      }
+
+      const npcDef = NPC_DEFINITIONS[npc.npcType as NpcType]
+      if (!npcDef) return
+
+      // Check distance - if too far, NPC should chase or lose aggro
+      const playerTile = worldToTile({ x: player.x, y: player.y })
+      const npcTile = worldToTile({ x: npc.x, y: npc.y })
+      const dx = Math.abs(playerTile.tileX - npcTile.tileX)
+      const dy = Math.abs(playerTile.tileY - npcTile.tileY)
+      const distance = Math.max(dx, dy)
+
+      // If too far from spawn, leash back
+      const spawnTile = worldToTile({ x: npc.spawnX, y: npc.spawnY })
+      const distFromSpawn = Math.max(
+        Math.abs(npcTile.tileX - spawnTile.tileX),
+        Math.abs(npcTile.tileY - spawnTile.tileY)
+      )
+
+      if (distFromSpawn > npc.leashRange) {
+        npc.targetId = ''
+        npc.x = npc.spawnX
+        npc.y = npc.spawnY
+        return
+      }
+
+      // Can only attack if adjacent
+      if (distance > 1) {
+        // TODO: NPC movement towards player
+        return
+      }
+
+      // Check attack cooldown
+      if (now - npc.lastAttackTime < COMBAT_TICK_MS * npcDef.attackSpeed) return
+      npc.lastAttackTime = now
+
+      // Get player defence level
+      const defenceXp = player.skills.get(SkillType.DEFENCE)?.xp || 0
+      const defenceLevel = getLevelFromXp(defenceXp)
+
+      // Roll to hit
+      const didHit = calculateHitChance(npcDef.attackLevel, npcDef.strengthLevel, defenceLevel)
+
+      let damage = 0
+      if (didHit) {
+        damage = rollDamage(npcDef.maxHit)
+      }
+
+      // Apply damage
+      player.currentHp = Math.max(0, player.currentHp - damage)
+
+      // Notify clients of hit
+      const client = this.clients.find((c) => c.sessionId === npc.targetId)
+      client?.send('combatHit', {
+        attackerId: npc.id,
+        targetId: npc.targetId,
+        damage,
+        targetHp: player.currentHp,
+        targetMaxHp: player.maxHp
+      })
+
+      // Check if player died
+      if (player.currentHp <= 0) {
+        this.handlePlayerDeath(npc.targetId)
+      }
+    })
+
+    // Check for aggressive NPCs to aggro nearby players
+    this.state.npcs.forEach((npc: NPC) => {
+      if (npc.isDead || npc.targetId) return
+
+      const npcDef = NPC_DEFINITIONS[npc.npcType as NpcType]
+      if (!npcDef || npcDef.aggroRange <= 0) return
+
+      const npcTile = worldToTile({ x: npc.x, y: npc.y })
+
+      // Find nearest player within aggro range
+      let nearestSessionId: string | null = null
+      let nearestDistance = Infinity
+
+      this.state.players.forEach((player: Player, sessionId: string) => {
+        const playerTile = worldToTile({ x: player.x, y: player.y })
+        const dx = Math.abs(playerTile.tileX - npcTile.tileX)
+        const dy = Math.abs(playerTile.tileY - npcTile.tileY)
+        const distance = Math.max(dx, dy)
+
+        if (distance <= npcDef.aggroRange && distance < nearestDistance) {
+          nearestSessionId = sessionId
+          nearestDistance = distance
+        }
+      })
+
+      if (nearestSessionId) {
+        npc.targetId = nearestSessionId
+
+        // Notify the player they're being attacked
+        const client = this.clients.find((c) => c.sessionId === nearestSessionId)
+        client?.send('npcAggro', { npcId: npc.id })
+      }
+    })
+  }
+
+  private handleNpcDeath(npc: NPC, killerSessionId: string) {
+    const npcDef = NPC_DEFINITIONS[npc.npcType as NpcType]
+    if (!npcDef) return
+
+    npc.isDead = true
+    npc.respawnAt = Date.now() + npcDef.respawnTime
+    npc.targetId = ''
+    npc.currentHp = 0
+
+    // Roll drops
+    const drops = rollDrops(npc.npcType as NpcType)
+
+    // Add drops to killer's inventory
+    const player = this.state.players.get(killerSessionId)
+    if (player) {
+      for (const drop of drops) {
+        this.addItemToInventory(player, drop.item, drop.quantity)
+      }
+      this.pendingSaves.add(killerSessionId)
+      this.sendStateUpdate(killerSessionId)
+    }
+
+    // Clear player's combat target
+    if (player) {
+      player.combatTargetId = ''
+    }
+
+    // Notify all clients
+    this.broadcast('npcDied', {
+      npcId: npc.id,
+      killerName: player?.name || 'Unknown',
+      drops: drops.map((d) => ({ itemType: d.item, quantity: d.quantity }))
+    })
+
+    // Notify killer specifically
+    const client = this.clients.find((c) => c.sessionId === killerSessionId)
+    client?.send('combatEnded', {})
+  }
+
+  private handlePlayerDeath(sessionId: string) {
+    const player = this.state.players.get(sessionId)
+    if (!player) return
+
+    // Clear combat state
+    player.combatTargetId = ''
+
+    // Clear any NPC targeting this player
+    this.state.npcs.forEach((npc: NPC) => {
+      if (npc.targetId === sessionId) {
+        npc.targetId = ''
+      }
+    })
+
+    // Respawn at spawn point with full HP
+    const spawnPos = tileToWorld(SPAWN_POINT)
+    player.x = spawnPos.x
+    player.y = spawnPos.y
+
+    const hitpointsXp = player.skills.get(SkillType.HITPOINTS)?.xp || 0
+    const hitpointsLevel = getLevelFromXp(hitpointsXp)
+    player.maxHp = calculateMaxHp(hitpointsLevel)
+    player.currentHp = player.maxHp
+
+    // Cancel any action
+    this.cancelAction(sessionId)
+
+    // Notify client
+    const client = this.clients.find((c) => c.sessionId === sessionId)
+    client?.send('playerDied', {
+      respawnX: player.x,
+      respawnY: player.y,
+      currentHp: player.currentHp,
+      maxHp: player.maxHp
+    })
+
+    // Broadcast death to all
+    this.broadcast('chat', {
+      sender: 'System',
+      text: `${player.name} has died!`
+    })
+  }
+
   private async savePlayerData(sessionId: string) {
     const player = this.state.players.get(sessionId)
     const playerId = this.playerDbIds.get(sessionId)
@@ -785,6 +1346,12 @@ export class WorldRoom extends Room {
     this.state.players.set(client.sessionId, player)
     console.log('Player added to state synchronously, skills:', player.skills.size)
 
+    // Set initial HP based on hitpoints level
+    const hitpointsXp = player.skills.get(SkillType.HITPOINTS)?.xp || 0
+    const hitpointsLevel = getLevelFromXp(hitpointsXp)
+    player.maxHp = calculateMaxHp(hitpointsLevel)
+    player.currentHp = player.maxHp
+
     // Send player's own data via message (state sync is unreliable)
     const skillsData: Record<string, number> = {}
     player.skills.forEach((skill, skillType) => {
@@ -796,7 +1363,9 @@ export class WorldRoom extends Room {
       x: player.x,
       y: player.y,
       skills: skillsData,
-      inventory: []
+      inventory: [],
+      currentHp: player.currentHp,
+      maxHp: player.maxHp
     })
 
     // Send world objects to the newly joined client
@@ -817,6 +1386,29 @@ export class WorldRoom extends Room {
       })
     })
     client.send('worldObjects', worldObjectsData)
+
+    // Send NPCs to the newly joined client
+    const npcsData: Array<{
+      id: string
+      npcType: string
+      x: number
+      y: number
+      currentHp: number
+      maxHp: number
+      isDead: boolean
+    }> = []
+    this.state.npcs.forEach((npc: NPC, id: string) => {
+      npcsData.push({
+        id,
+        npcType: npc.npcType,
+        x: npc.x,
+        y: npc.y,
+        currentHp: npc.currentHp,
+        maxHp: npc.maxHp,
+        isDead: npc.isDead
+      })
+    })
+    client.send('npcs', npcsData)
 
     this.broadcast('chat', {
       sender: 'System',
@@ -862,6 +1454,12 @@ export class WorldRoom extends Room {
         console.log('Loaded player bank from DB for:', username)
       }
 
+      // Update HP based on hitpoints level from DB
+      const hitpointsXp = player.skills.get(SkillType.HITPOINTS)?.xp || 0
+      const hitpointsLevel = getLevelFromXp(hitpointsXp)
+      player.maxHp = calculateMaxHp(hitpointsLevel)
+      player.currentHp = player.maxHp
+
       // Send updated data to client via message (state sync is unreliable)
       const client = this.clients.find((c) => c.sessionId === sessionId)
       if (client) {
@@ -882,7 +1480,9 @@ export class WorldRoom extends Room {
           x: player.x,
           y: player.y,
           skills: skillsData,
-          inventory: inventoryData
+          inventory: inventoryData,
+          currentHp: player.currentHp,
+          maxHp: player.maxHp
         })
         console.log('Sent playerData message to client for:', username)
       }
@@ -921,6 +1521,13 @@ export class WorldRoom extends Room {
       clearTimeout(timer)
     }
     this.actionTimers.clear()
+
+    // Clear combat interval
+    if (this.combatInterval) {
+      this.combatInterval.clear()
+      this.combatInterval = null
+    }
+
     console.log('WorldRoom disposed')
   }
 }

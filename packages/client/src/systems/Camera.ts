@@ -1,4 +1,4 @@
-import { ArcRotateCamera, Scene, Vector3, Plane } from '@babylonjs/core'
+import { ArcRotateCamera, Scene, Vector3, AbstractMesh, Mesh } from '@babylonjs/core'
 import { TILE_SIZE } from '@realm/shared'
 import type { Position } from '@realm/shared'
 
@@ -11,7 +11,9 @@ export class Camera {
 
   private arcCamera: ArcRotateCamera
   private scene: Scene
-  private groundPlane: Plane
+  private pickableMeshes: Set<AbstractMesh> | null = null
+  private panOffsetX: number = 0
+  private panOffsetZ: number = 0
 
   // Current camera target in 3D world coordinates
   private targetX: number = 0
@@ -31,12 +33,9 @@ export class Camera {
     this.worldHeight = worldHeight
     this.arcCamera = arcCamera
     this.scene = scene
-
-    // Ground plane at y=0 for raycasting
-    this.groundPlane = Plane.FromPositionAndNormal(Vector3.Zero(), Vector3.Up())
   }
 
-  follow(target: Position) {
+  follow(target: Position, heightY: number = 0) {
     // Convert 2D position to 3D coordinates
     const scale = 1 / TILE_SIZE
     const target3DX = target.x * scale
@@ -45,6 +44,10 @@ export class Camera {
     // Smooth interpolation
     this.targetX += (target3DX - this.targetX) * this.smoothing
     this.targetZ += (target3DZ - this.targetZ) * this.smoothing
+
+    // Apply pan offset
+    this.targetX += this.panOffsetX
+    this.targetZ += this.panOffsetZ
 
     // Clamp to world bounds (in 3D units)
     const worldWidth3D = this.worldWidth / TILE_SIZE
@@ -70,7 +73,7 @@ export class Camera {
     }
 
     // Update camera target
-    this.arcCamera.setTarget(new Vector3(this.targetX, 0, this.targetZ))
+    this.arcCamera.setTarget(new Vector3(this.targetX, heightY, this.targetZ))
   }
 
   resize(screenWidth: number, screenHeight: number) {
@@ -78,28 +81,44 @@ export class Camera {
     this.screenHeight = screenHeight
   }
 
+  setPickableMeshes(meshes: Mesh[]) {
+    this.pickableMeshes = new Set(meshes)
+  }
+
+  nudgePan(dx: number, dz: number) {
+    this.panOffsetX += dx
+    this.panOffsetZ += dz
+  }
+
   screenToWorld(screenX: number, screenY: number): Position | null {
-    // Cast a ray from screen coordinates to the ground plane
-    const ray = this.scene.createPickingRay(
-      screenX,
-      screenY,
-      null,
+    const canvas = this.scene.getEngine().getRenderingCanvas()
+    if (!canvas) return null
+    const rect = canvas.getBoundingClientRect()
+    const canvasX = screenX - rect.left
+    const canvasY = screenY - rect.top
+
+    const pick = this.scene.pick(
+      canvasX,
+      canvasY,
+      (mesh) => {
+        if (!mesh) return false
+        if (!this.pickableMeshes) return true
+        if (this.pickableMeshes.has(mesh)) return true
+        const sourceMesh = (mesh as { sourceMesh?: AbstractMesh }).sourceMesh
+        return sourceMesh ? this.pickableMeshes.has(sourceMesh) : false
+      },
+      false,
       this.arcCamera
     )
 
-    // Find intersection with ground plane (y=0)
-    const distance = ray.intersectsPlane(this.groundPlane)
-    if (distance === null) {
+    if (!pick?.hit || !pick.pickedPoint) {
       return null
     }
 
-    // Get the 3D world position
-    const worldPos3D = ray.origin.add(ray.direction.scale(distance))
-
     // Convert back to 2D game coordinates
     return {
-      x: worldPos3D.x * TILE_SIZE,
-      y: worldPos3D.z * TILE_SIZE // z in 3D maps to y in 2D
+      x: pick.pickedPoint.x * TILE_SIZE,
+      y: pick.pickedPoint.z * TILE_SIZE // z in 3D maps to y in 2D
     }
   }
 

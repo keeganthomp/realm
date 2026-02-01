@@ -6,15 +6,21 @@ import {
   HemisphericLight,
   Vector3,
   Color4,
-  PointerEventTypes
+  PointerEventTypes,
+  Mesh,
+  MeshBuilder,
+  Color3,
+  StandardMaterial
 } from '@babylonjs/core'
+import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
 import { Player } from './entities/Player'
 import { RemotePlayer } from './entities/RemotePlayer'
 import { WorldObjectEntity } from './entities/WorldObjectEntity'
-import { TilemapRenderer } from './systems/TilemapRenderer'
+import { NpcEntity } from './entities/NpcEntity'
+import { TilemapRenderer, LEVEL_H, TILE_THICK } from './systems/TilemapRenderer'
 import { Camera } from './systems/Camera'
 import { Pathfinding } from './systems/Pathfinding'
-import { worldToTile, tileToWorld, WorldObjectType, TILE_SIZE } from '@realm/shared'
+import { worldToTile, tileToWorld, WorldObjectType, NpcType, TILE_SIZE } from '@realm/shared'
 import type { Position, Direction } from '@realm/shared'
 
 export class Game {
@@ -24,14 +30,26 @@ export class Game {
   private player!: Player
   private remotePlayers: Map<string, RemotePlayer> = new Map()
   private worldObjects: Map<string, WorldObjectEntity> = new Map()
+  private npcs: Map<string, NpcEntity> = new Map()
   private tilemap!: TilemapRenderer
   private camera!: Camera
   private pathfinding!: Pathfinding
   private lastTime: number = 0
+  private rotationStep: number = Math.PI / 2
+  private hoveredObjectId: string | null = null
+  private hoveredNpcId: string | null = null
+  private hoverIndicator!: Mesh
+  private hoverUi!: AdvancedDynamicTexture
+  private hoverLabel!: TextBlock
+  private lastActionTarget: Position | null = null
+  private panKeys: Set<string> = new Set()
+  private skillingActionActive: boolean = false
+  private combatTargetId: string | null = null
 
   // Callbacks
   public onLocalPlayerMove?: (position: Position, path: Position[]) => void
   public onWorldObjectClick?: (objectId: string, objectPosition: Position) => void
+  public onNpcClick?: (npcId: string, npcPosition: Position) => void
 
   async init(container: HTMLElement) {
     // Create canvas for Babylon.js
@@ -46,23 +64,27 @@ export class Game {
     this.scene = new Scene(this.engine)
     this.scene.clearColor = new Color4(0.1, 0.1, 0.18, 1) // #1a1a2e
 
-    // Setup orthographic camera with isometric angle
-    // alpha = 45° rotation, beta = 55° from vertical
+    // Setup perspective camera with OSRS-like angle
     this.arcCamera = new ArcRotateCamera(
       'camera',
-      Math.PI / 4, // 45° alpha (rotation around Y axis)
-      Math.PI / 3, // 55° beta (angle from top)
-      50, // radius (will be used for ortho sizing)
+      -Math.PI / 4, // 45° yaw
+      Math.PI / 3, // 60° pitch
+      22, // radius (zoom)
       Vector3.Zero(),
       this.scene
     )
 
-    // Set orthographic mode
-    this.arcCamera.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA
-    this.updateCameraOrtho()
+    this.arcCamera.fov = 0.7
+    this.arcCamera.lowerBetaLimit = 0.95
+    this.arcCamera.upperBetaLimit = 1.25
+    this.arcCamera.lowerRadiusLimit = 14
+    this.arcCamera.upperRadiusLimit = 34
+    this.arcCamera.panningSensibility = 0
+    this.arcCamera.allowUpsideDown = false
+    this.arcCamera.inertia = 0.85
 
-    // Disable camera controls (we manage camera position)
-    this.arcCamera.attachControl(canvas, false)
+    // Disable direct user control; we'll manage camera in code
+    this.arcCamera.attachControl(canvas, true)
     this.arcCamera.inputs.clear()
 
     // Add ambient lighting
@@ -74,26 +96,15 @@ export class Game {
     this.setupInput()
 
     window.addEventListener('resize', this.handleResize)
-  }
-
-  private updateCameraOrtho() {
-    const canvas = this.engine.getRenderingCanvas()
-    if (!canvas) return
-
-    const aspect = canvas.width / canvas.height
-    const orthoSize = 15 // Controls zoom level
-
-    this.arcCamera.orthoLeft = -orthoSize * aspect
-    this.arcCamera.orthoRight = orthoSize * aspect
-    this.arcCamera.orthoTop = orthoSize
-    this.arcCamera.orthoBottom = -orthoSize
+    window.addEventListener('keydown', this.handleKeyDown)
+    window.addEventListener('keyup', this.handleKeyUp)
   }
 
   private async initSystems() {
     this.tilemap = new TilemapRenderer(this.scene)
     await this.tilemap.init()
 
-    this.pathfinding = new Pathfinding(this.tilemap.getCollisionGrid())
+    this.pathfinding = new Pathfinding(this.tilemap.getCollisionGrid(), this.tilemap.getHeights())
 
     const canvas = this.engine.getRenderingCanvas()!
     this.camera = new Camera(
@@ -104,6 +115,8 @@ export class Game {
       this.arcCamera,
       this.scene
     )
+    this.camera.setPickableMeshes(this.tilemap.getTerrainMeshes())
+    this.createHoverIndicator()
   }
 
   private async initPlayer() {
@@ -112,8 +125,9 @@ export class Game {
 
     this.player = new Player(startPos, this.scene)
     await this.player.init()
+    this.player.setHeightProvider((tileX, tileY) => this.getTileHeightY(tileX, tileY))
 
-    this.camera.follow(this.player.position)
+    this.camera.follow(this.player.position, this.getHeightAtPosition(this.player.position))
   }
 
   private setupInput() {
@@ -124,6 +138,12 @@ export class Game {
           pointerInfo.event.preventDefault()
         }
         this.processClick(pointerInfo.event as PointerEvent)
+      }
+    })
+
+    this.scene.onPointerObservable.add((pointerInfo) => {
+      if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
+        this.processHover(pointerInfo.event as PointerEvent)
       }
     })
 
@@ -138,12 +158,64 @@ export class Game {
     const worldPos = this.camera.screenToWorld(e.clientX, e.clientY)
     if (!worldPos) return
 
+    // Cancel current action locally before new input
+    if (this.player.isActioning) {
+      this.player.setActioning(false)
+      this.player.setActionTarget(null)
+    }
+
+    // Check if clicking on an NPC
+    const clickedNpc = this.findNpcAt(worldPos)
+    if (clickedNpc && !clickedNpc.isDead) {
+      // Walk to adjacent tile, then start attack
+      const npcPos = clickedNpc.getPosition()
+      const adjacentTile = this.findAdjacentWalkableTile(
+        worldToTile({ x: npcPos.x, y: npcPos.y }),
+        worldToTile(this.player.position)
+      )
+
+      if (adjacentTile) {
+        const playerTile = worldToTile(this.player.position)
+        const path = this.pathfinding.findPath(
+          playerTile.tileX,
+          playerTile.tileY,
+          adjacentTile.tileX,
+          adjacentTile.tileY
+        )
+
+        if (path && path.length > 0) {
+          const worldPath: Position[] = path.map((tile) => tileToWorld(tile))
+          this.player.setPath(worldPath, () => {
+            // Callback when path complete - trigger attack
+            this.onNpcClick?.(clickedNpc.id, {
+              x: npcPos.x,
+              y: npcPos.y
+            })
+          })
+          this.onLocalPlayerMove?.(this.player.position, worldPath)
+        } else if (
+          Math.abs(playerTile.tileX - adjacentTile.tileX) <= 1 &&
+          Math.abs(playerTile.tileY - adjacentTile.tileY) <= 1
+        ) {
+          // Already adjacent
+          this.onNpcClick?.(clickedNpc.id, {
+            x: npcPos.x,
+            y: npcPos.y
+          })
+        }
+      }
+      return
+    }
+
     // Check if clicking on a world object
     const clickedObject = this.findWorldObjectAt(worldPos)
     if (clickedObject && !clickedObject.depleted) {
       // Walk to adjacent tile, then start action
       const objPos = clickedObject.getPosition()
-      const adjacentTile = this.findAdjacentWalkableTile(worldToTile({ x: objPos.x, y: objPos.y }))
+      const adjacentTile = this.findAdjacentWalkableTile(
+        worldToTile({ x: objPos.x, y: objPos.y }),
+        worldToTile(this.player.position)
+      )
 
       if (adjacentTile) {
         const playerTile = worldToTile(this.player.position)
@@ -158,6 +230,8 @@ export class Game {
           const worldPath: Position[] = path.map((tile) => tileToWorld(tile))
           this.player.setPath(worldPath, () => {
             // Callback when path complete - trigger action
+            this.lastActionTarget = { x: objPos.x, y: objPos.y }
+            this.player.setActionTarget(this.lastActionTarget)
             this.onWorldObjectClick?.(clickedObject.id, {
               x: objPos.x,
               y: objPos.y
@@ -169,6 +243,8 @@ export class Game {
           Math.abs(playerTile.tileY - adjacentTile.tileY) <= 1
         ) {
           // Already adjacent
+          this.lastActionTarget = { x: objPos.x, y: objPos.y }
+          this.player.setActionTarget(this.lastActionTarget)
           this.onWorldObjectClick?.(clickedObject.id, {
             x: objPos.x,
             y: objPos.y
@@ -195,8 +271,44 @@ export class Game {
     if (path && path.length > 0) {
       const worldPath: Position[] = path.map((tile) => tileToWorld(tile))
       this.player.setPath(worldPath)
+      this.player.setActionTarget(null)
       this.onLocalPlayerMove?.(this.player.position, worldPath)
     }
+  }
+
+  private processHover(e: PointerEvent) {
+    const worldPos = this.camera.screenToWorld(e.clientX, e.clientY)
+    if (!worldPos) {
+      this.setHoveredObject(null)
+      this.setHoveredNpc(null)
+      this.setHoverTile(null)
+      return
+    }
+
+    const hoveredObject = this.findWorldObjectAt(worldPos)
+    if (hoveredObject && !hoveredObject.depleted) {
+      this.setHoveredObject(hoveredObject.id)
+      this.setHoveredNpc(null)
+      this.setHoverTile(null)
+      return
+    }
+
+    const hoveredNpc = this.findNpcAt(worldPos)
+    if (hoveredNpc && !hoveredNpc.isDead) {
+      this.setHoveredNpc(hoveredNpc.id)
+      this.setHoveredObject(null)
+      this.setHoverTile(null)
+      return
+    }
+
+    const targetTile = worldToTile(worldPos)
+    if (this.tilemap.isWalkable(targetTile.tileX, targetTile.tileY)) {
+      this.setHoverTile(targetTile)
+    } else {
+      this.setHoverTile(null)
+    }
+    this.setHoveredObject(null)
+    this.setHoveredNpc(null)
   }
 
   private findWorldObjectAt(pos: Position): WorldObjectEntity | null {
@@ -213,7 +325,63 @@ export class Game {
     return null
   }
 
-  private findAdjacentWalkableTile(objectTile: { tileX: number; tileY: number }) {
+  private setHoveredObject(id: string | null) {
+    if (this.hoveredObjectId === id) return
+    if (this.hoveredObjectId) {
+      const prev = this.worldObjects.get(this.hoveredObjectId)
+      prev?.setHovered(false)
+    }
+    this.hoveredObjectId = id
+    if (id) {
+      const obj = this.worldObjects.get(id)
+      obj?.setHovered(true)
+    }
+  }
+
+  private setHoveredNpc(id: string | null) {
+    if (this.hoveredNpcId === id) return
+    if (this.hoveredNpcId) {
+      const prev = this.npcs.get(this.hoveredNpcId)
+      prev?.setHovered(false)
+    }
+    this.hoveredNpcId = id
+    if (id) {
+      const npc = this.npcs.get(id)
+      npc?.setHovered(true)
+    }
+  }
+
+  private setHoverTile(tile: { tileX: number; tileY: number } | null) {
+    if (!tile) {
+      this.hoverIndicator.isVisible = false
+      this.hoverLabel.isVisible = false
+      return
+    }
+    const heightY = this.getTileHeightY(tile.tileX, tile.tileY)
+    this.hoverIndicator.position.set(tile.tileX + 0.5, heightY + 0.01, tile.tileY + 0.5)
+    this.hoverIndicator.isVisible = true
+    this.hoverLabel.isVisible = true
+    this.hoverLabel.linkWithMesh(this.hoverIndicator)
+  }
+
+  private findNpcAt(pos: Position): NpcEntity | null {
+    const clickRadius = TILE_SIZE / 2 + 8
+    for (const npc of this.npcs.values()) {
+      const npcPos = npc.getPosition()
+      const dx = pos.x - npcPos.x
+      const dy = pos.y - npcPos.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < clickRadius) {
+        return npc
+      }
+    }
+    return null
+  }
+
+  private findAdjacentWalkableTile(
+    objectTile: { tileX: number; tileY: number },
+    fromTile: { tileX: number; tileY: number }
+  ) {
     const directions = [
       { dx: 0, dy: 1 },
       { dx: 0, dy: -1 },
@@ -225,21 +393,60 @@ export class Game {
       { dx: -1, dy: -1 }
     ]
 
+    let best: { tileX: number; tileY: number } | null = null
+    let bestScore = Number.POSITIVE_INFINITY
+
     for (const dir of directions) {
       const checkX = objectTile.tileX + dir.dx
       const checkY = objectTile.tileY + dir.dy
-      if (this.tilemap.isWalkable(checkX, checkY)) {
-        return { tileX: checkX, tileY: checkY }
+      if (
+        this.tilemap.isWalkable(checkX, checkY) &&
+        Math.abs(
+          this.tilemap.getHeight(checkX, checkY) -
+            this.tilemap.getHeight(objectTile.tileX, objectTile.tileY)
+        ) <= 1
+      ) {
+        const dx = checkX - fromTile.tileX
+        const dy = checkY - fromTile.tileY
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        if (dist < bestScore) {
+          bestScore = dist
+          best = { tileX: checkX, tileY: checkY }
+        }
       }
     }
-    return null
+    return best
   }
 
   private handleResize = () => {
     this.engine.resize()
-    this.updateCameraOrtho()
     const canvas = this.engine.getRenderingCanvas()!
     this.camera.resize(canvas.width, canvas.height)
+  }
+
+  private handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key.toLowerCase() === 'q') {
+      this.arcCamera.alpha -= this.rotationStep
+    } else if (e.key.toLowerCase() === 'e') {
+      this.arcCamera.alpha += this.rotationStep
+    } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      this.panKeys.add(e.key)
+    }
+  }
+
+  private handleKeyUp = (e: KeyboardEvent) => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      this.panKeys.delete(e.key)
+    }
+  }
+
+  private getTileHeightY(tileX: number, tileY: number): number {
+    return this.tilemap.getHeight(tileX, tileY) * LEVEL_H + TILE_THICK
+  }
+
+  private getHeightAtPosition(position: Position): number {
+    const tile = worldToTile(position)
+    return this.getTileHeightY(tile.tileX, tile.tileY)
   }
 
   // World object management
@@ -247,6 +454,7 @@ export class Game {
     if (this.worldObjects.has(id)) return
 
     const obj = new WorldObjectEntity(id, objectType, x, y, this.scene)
+    obj.setHeightProvider((tileX, tileY) => this.getTileHeightY(tileX, tileY))
     this.worldObjects.set(id, obj)
   }
 
@@ -265,6 +473,54 @@ export class Game {
     }
   }
 
+  // NPC management
+  addNpc(id: string, npcType: NpcType, x: number, y: number, currentHp: number, maxHp: number) {
+    if (this.npcs.has(id)) return
+
+    const npc = new NpcEntity(id, npcType, x, y, currentHp, maxHp, this.scene)
+    npc.setHeightProvider((tileX, tileY) => this.getTileHeightY(tileX, tileY))
+    this.npcs.set(id, npc)
+  }
+
+  removeNpc(id: string) {
+    const npc = this.npcs.get(id)
+    if (npc) {
+      npc.dispose()
+      this.npcs.delete(id)
+    }
+  }
+
+  updateNpc(id: string, x: number, y: number, currentHp: number, maxHp: number) {
+    const npc = this.npcs.get(id)
+    if (npc) {
+      if (x !== 0 || y !== 0) {
+        npc.setPosition(x, y)
+      }
+      npc.setHealth(currentHp, maxHp)
+    }
+  }
+
+  updateNpcHealth(id: string, currentHp: number, maxHp: number) {
+    const npc = this.npcs.get(id)
+    if (npc) {
+      npc.setHealth(currentHp, maxHp)
+    }
+  }
+
+  setNpcDead(id: string, isDead: boolean) {
+    const npc = this.npcs.get(id)
+    if (npc) {
+      npc.setDead(isDead)
+    }
+  }
+
+  showNpcHitSplat(id: string, damage: number) {
+    const npc = this.npcs.get(id)
+    if (npc) {
+      npc.showHitSplat(damage)
+    }
+  }
+
   // Player management
   getLocalPlayerPosition(): Position {
     return { ...this.player.position }
@@ -279,6 +535,7 @@ export class Game {
 
     const remotePlayer = new RemotePlayer(position, name, this.scene)
     await remotePlayer.init()
+    remotePlayer.setHeightProvider((tileX, tileY) => this.getTileHeightY(tileX, tileY))
     this.remotePlayers.set(id, remotePlayer)
   }
 
@@ -300,6 +557,51 @@ export class Game {
   // Action state
   setPlayerAction(isActioning: boolean) {
     this.player.setActioning(isActioning)
+    this.skillingActionActive = isActioning
+    if (isActioning) {
+      this.player.setActionTarget(this.lastActionTarget)
+      if (!this.playerActionModeOverride) {
+        this.player.setActionMode('skilling')
+      }
+    } else {
+      if (!this.combatTargetId) {
+        this.player.setActionTarget(null)
+        if (!this.playerActionModeOverride) {
+          this.player.setActionMode(null)
+        }
+      }
+    }
+  }
+
+  private playerActionModeOverride: 'skilling' | 'combat' | 'cooking' | 'chopping' | null = null
+
+  setSkillingAction(action: string | null) {
+    if (!action) {
+      this.playerActionModeOverride = null
+      if (!this.combatTargetId && !this.skillingActionActive) {
+        this.player.setActionMode(null)
+      }
+      return
+    }
+    if (action.toLowerCase().includes('cook')) {
+      this.playerActionModeOverride = 'cooking'
+      this.player.setActionMode('cooking')
+    } else if (action.toLowerCase().includes('chop')) {
+      this.playerActionModeOverride = 'chopping'
+      this.player.setActionMode('chopping')
+    } else {
+      this.playerActionModeOverride = 'skilling'
+      this.player.setActionMode('skilling')
+    }
+  }
+
+  setCombatTarget(npcId: string | null) {
+    this.combatTargetId = npcId
+    if (!npcId && !this.skillingActionActive) {
+      this.player.setActioning(false)
+      this.player.setActionTarget(null)
+      this.player.setActionMode(null)
+    }
   }
 
   start() {
@@ -316,7 +618,46 @@ export class Game {
         remotePlayer.update(delta)
       }
 
-      this.camera.follow(this.player.position)
+      for (const npc of this.npcs.values()) {
+        npc.update(delta)
+      }
+
+      if (this.combatTargetId) {
+        const npc = this.npcs.get(this.combatTargetId)
+        if (npc && !npc.isDead) {
+          const npcPos = npc.getPosition()
+          this.player.setActionTarget({ x: npcPos.x, y: npcPos.y })
+          this.player.setActionMode('combat')
+          this.player.setActioning(true)
+        } else {
+          this.combatTargetId = null
+          if (!this.skillingActionActive) {
+            this.player.setActioning(false)
+            this.player.setActionTarget(null)
+            this.player.setActionMode(null)
+          }
+        }
+      } else if (this.skillingActionActive) {
+        const mode = this.playerActionModeOverride ?? 'skilling'
+        this.player.setActionMode(mode)
+        this.player.setActioning(true)
+        this.player.setActionTarget(this.lastActionTarget)
+      }
+
+      this.camera.follow(this.player.position, this.getHeightAtPosition(this.player.position))
+
+      if (this.panKeys.size > 0) {
+        const panSpeed = 6
+        let dx = 0
+        let dz = 0
+        if (this.panKeys.has('ArrowLeft')) dx -= panSpeed * delta * 0.1
+        if (this.panKeys.has('ArrowRight')) dx += panSpeed * delta * 0.1
+        if (this.panKeys.has('ArrowUp')) dz -= panSpeed * delta * 0.1
+        if (this.panKeys.has('ArrowDown')) dz += panSpeed * delta * 0.1
+        if (dx !== 0 || dz !== 0) {
+          this.camera.nudgePan(dx, dz)
+        }
+      }
 
       this.scene.render()
     })
@@ -324,6 +665,38 @@ export class Game {
 
   destroy() {
     window.removeEventListener('resize', this.handleResize)
+    window.removeEventListener('keydown', this.handleKeyDown)
+    window.removeEventListener('keyup', this.handleKeyUp)
+    this.hoverIndicator?.dispose()
+    this.hoverUi?.dispose()
     this.engine.dispose()
+  }
+
+  private createHoverIndicator() {
+    this.hoverIndicator = MeshBuilder.CreateDisc(
+      'hoverIndicator',
+      { radius: 0.45, tessellation: 24 },
+      this.scene
+    )
+    const mat = new StandardMaterial('hoverIndicatorMat', this.scene)
+    mat.diffuseColor = new Color3(1, 1, 1)
+    mat.emissiveColor = new Color3(0.2, 0.6, 1)
+    mat.specularColor = Color3.Black()
+    mat.alpha = 0.35
+    this.hoverIndicator.material = mat
+    this.hoverIndicator.rotation.x = Math.PI / 2
+    this.hoverIndicator.isPickable = false
+    this.hoverIndicator.isVisible = false
+
+    this.hoverUi = AdvancedDynamicTexture.CreateFullscreenUI('hoverUI', true, this.scene)
+    this.hoverLabel = new TextBlock('hoverLabel', 'Walk here')
+    this.hoverLabel.color = 'white'
+    this.hoverLabel.fontSize = 12
+    this.hoverLabel.fontFamily = 'Inter, sans-serif'
+    this.hoverLabel.outlineWidth = 2
+    this.hoverLabel.outlineColor = 'black'
+    this.hoverLabel.isVisible = false
+    this.hoverLabel.linkOffsetY = -40
+    this.hoverUi.addControl(this.hoverLabel)
   }
 }

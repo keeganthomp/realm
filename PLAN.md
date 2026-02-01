@@ -14,7 +14,7 @@ Build a medieval fantasy 2D MMO with click-to-action gameplay, skill progression
 
 | Category | Technology | Version |
 |----------|------------|---------|
-| Rendering | PixiJS | v8.6.0 |
+| Rendering | Babylon.js | v8.6.0 |
 | UI Framework | React | v19.0.0 |
 | Multiplayer | Colyseus | v0.17.8 |
 | State Schema | @colyseus/schema | v4.0.7 |
@@ -26,12 +26,12 @@ Build a medieval fantasy 2D MMO with click-to-action gameplay, skill progression
 | Linting | ESLint | v9.39.2 |
 | Formatting | Prettier | v3.8.1 |
 
-### Rendering: **PixiJS v8**
-- 3x smaller bundle than Phaser (450KB vs 1.2MB)
-- 2x faster pure rendering performance
-- WebGL2 with Canvas fallback
-- Maximum control for custom MMO systems
-- Perfect for sprite batching (100s of players on screen)
+### Rendering: **Babylon.js**
+- Full 3D engine with perspective camera
+- OSRS-style isometric view with Q/E rotation
+- Height-based terrain with cliff faces
+- Mesh instancing for terrain tiles
+- GUI system for health bars and labels
 
 ### Backend: **Colyseus 0.17**
 - Node.js-based multiplayer framework
@@ -279,18 +279,38 @@ Level 99 cap (or 120 for endgame)
 
 ---
 
-### Phase 5: Combat System
+### Phase 5: Combat System ✅
 **Goal**: PvE combat loop
 
-- [ ] Combat stats (Attack, Strength, Defence, Hitpoints)
-- [ ] NPC spawning and AI
-- [ ] Click-to-attack targeting
-- [ ] Damage calculation formulas
-- [ ] Death and respawning
-- [ ] Loot drops
-- [ ] Combat XP gains
+- [x] Combat stats (Attack, Strength, Defence, Hitpoints)
+- [x] NPC spawning (Chicken lvl 1, Cow lvl 2, Goblin lvl 5)
+- [x] Click-to-attack targeting (walk to NPC, auto-attack)
+- [x] Damage calculation formulas (OSRS-style accuracy/max hit)
+- [x] Death and respawning (NPCs respawn after timer, players at spawn)
+- [x] Loot drops (bones, raw meat, feathers, coins)
+- [x] Combat XP gains (4 XP per damage + 1.33 HP XP)
+- [x] Combat styles (Accurate/Aggressive/Defensive)
+- [x] NPC health bars (always visible, color-coded)
+- [x] Hit splats (damage numbers on hit)
+- [x] Aggro system (Goblins attack players within 3 tiles)
+- [x] Food eating (right-click food in inventory to heal)
 
-**Deliverable**: Players can fight monsters
+**Deliverable**: Players can fight monsters ✅
+
+---
+
+### Phase 5.5: 3D Terrain ✅
+**Goal**: Height-based 3D world
+
+- [x] Babylon.js 3D renderer with perspective camera
+- [x] Multi-level terrain with height map
+- [x] Cliff faces auto-generated between levels
+- [x] Height-aware A* pathfinding (can't climb cliffs > 1 level)
+- [x] OSRS-style camera angle (Q/E to rotate 45°)
+- [x] Entities positioned at correct Y height
+- [x] Mesh instancing for performance
+
+**Deliverable**: 3D explorable world with elevation
 
 ---
 
@@ -471,18 +491,45 @@ pnpm typecheck        # TypeScript type checking
 
 ## Current Status
 
-**Phases 1-4 Complete** - Core engine, multiplayer, skill system, and full inventory management are working.
+**Phases 1-5.5 Complete** - Full combat system and 3D terrain working.
 
-Features implemented in Phase 4:
-- Drop items via right-click context menu
-- Item stacking for stackable items (coins, feathers, fishing bait)
-- Use item on object: select raw fish in inventory, click fire to cook
-- Bank storage: click bank booth to open, deposit/withdraw items with persistence
+### Combat System (Phase 5)
+- NPCs: Chicken (lvl 1), Cow (lvl 2), Goblin (lvl 5 aggressive)
+- Click NPC to walk adjacent and auto-attack
+- OSRS-style damage formulas (accuracy roll vs defence roll)
+- XP: 4 per damage to combat skill + 1.33 HP XP
+- Combat styles: Accurate (Attack), Aggressive (Strength), Defensive (Defence)
+- NPC health bars always visible
+- Hit splats show damage numbers
+- Loot drops on kill (bones, raw meat, feathers, coins)
+- Right-click food to eat and heal
+- Respawn: NPCs after timer, players at spawn point
+
+### 3D Terrain (Phase 5.5)
+- Babylon.js perspective camera (OSRS-style angle)
+- Height map with plateaus and cliffs
+- Auto-generated cliff faces between levels
+- Height-aware pathfinding (can't climb > 1 level)
+- Q/E keys rotate camera 45°
+- All entities positioned at correct Y height
+
+### NPC Locations
+| NPC | Tiles | Notes |
+|-----|-------|-------|
+| Chicken x3 | (8,12), (9,13), (10,12) | Easy kills near spawn |
+| Cow x3 | (28,12), (29,13), (30,12) | East side |
+| Goblin x2 | (35,18), (36,19) | Aggressive, harder |
 
 ## Next Steps
 
-1. Begin Phase 5: Combat System
-   - Combat stats (Attack, Strength, Defence, Hitpoints)
-   - NPC spawning and AI
-   - Click-to-attack targeting
-   - Damage calculation formulas
+1. **Phase 6: Equipment System**
+   - Equipment slots (helm, body, legs, weapon, shield)
+   - Item stats (attack/strength/defence bonuses)
+   - Combat bonuses from equipped gear
+   - Equipment panel UI
+   - Bronze/Iron/Steel tier progression
+
+2. **NPC Improvements**
+   - NPC movement/chasing
+   - More NPC types
+   - Better spawn distribution

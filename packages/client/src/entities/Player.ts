@@ -8,7 +8,7 @@ import {
   Mesh
 } from '@babylonjs/core'
 import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
-import { Direction, getDirection } from '@realm/shared'
+import { Direction, getDirection, TILE_SIZE } from '@realm/shared'
 import type { Position } from '@realm/shared'
 
 const MOVE_SPEED = 3 // pixels per frame at 60fps
@@ -25,11 +25,24 @@ export class Player {
   private head!: Mesh
   private leftLeg!: Mesh
   private rightLeg!: Mesh
+  private leftArm!: Mesh
+  private rightArm!: Mesh
   private actionIndicators: Mesh[] = []
+  private baseBodyY: number = 0
+  private baseHeadY: number = 0
+  private baseLeftLegY: number = 0
+  private baseRightLegY: number = 0
+  private baseLeftArmY: number = 0
+  private baseRightArmY: number = 0
 
   private path: Position[] = []
   private currentTarget: Position | null = null
   private onPathComplete?: () => void
+  private walkTime: number = 0
+  private actionTime: number = 0
+  private actionTarget: Position | null = null
+  private actionMode: 'skilling' | 'combat' | 'cooking' | 'chopping' | null = null
+  private heightProvider: ((tileX: number, tileY: number) => number) | null = null
 
   private guiTexture: AdvancedDynamicTexture | null = null
   private nameLabel: TextBlock | null = null
@@ -50,6 +63,8 @@ export class Player {
     const bodyColor = new Color3(0.29, 0.56, 0.85) // #4a90d9 Blue tunic
     const skinColor = new Color3(0.96, 0.82, 0.66) // #f5d0a9 Skin tone
     const legColor = new Color3(0.24, 0.24, 0.24) // #3d3d3d Dark pants
+    const bootColor = new Color3(0.17, 0.11, 0.07) // #2b1c12
+    const hairColor = new Color3(0.25, 0.18, 0.07) // #3f2e12
 
     // Body material
     const bodyMat = new StandardMaterial('playerBodyMat', this.scene)
@@ -66,45 +81,111 @@ export class Player {
     legMat.diffuseColor = legColor
     legMat.specularColor = Color3.Black()
 
-    // Body (cylinder)
-    this.body = MeshBuilder.CreateCylinder(
+    const applyFlat = (mesh: Mesh) => {
+      mesh.convertToFlatShadedMesh()
+    }
+
+    // Torso (boxy, slightly shorter)
+    this.body = MeshBuilder.CreateBox(
       'playerBody',
-      { height: 0.5, diameter: 0.4, tessellation: 8 },
+      { height: 0.45, width: 0.42, depth: 0.2 },
       this.scene
     )
     this.body.material = bodyMat
-    this.body.position.y = 0.45
+    this.body.position.y = 0.58
     this.body.parent = this.node
+    applyFlat(this.body)
+    this.baseBodyY = this.body.position.y
 
-    // Head (sphere)
-    this.head = MeshBuilder.CreateSphere(
-      'playerHead',
-      { diameter: 0.35, segments: 8 },
-      this.scene
-    )
+    // Head (boxy, slightly larger)
+    this.head = MeshBuilder.CreateBox('playerHead', { size: 0.36 }, this.scene)
     this.head.material = skinMat
-    this.head.position.y = 0.85
+    this.head.position.y = 0.97
     this.head.parent = this.node
+    applyFlat(this.head)
+    this.baseHeadY = this.head.position.y
 
-    // Left leg (cylinder)
-    this.leftLeg = MeshBuilder.CreateCylinder(
+    // Left leg (box)
+    this.leftLeg = MeshBuilder.CreateBox(
       'playerLeftLeg',
-      { height: 0.25, diameter: 0.12, tessellation: 6 },
+      { height: 0.32, width: 0.13, depth: 0.15 },
       this.scene
     )
     this.leftLeg.material = legMat
-    this.leftLeg.position.set(-0.1, 0.125, 0)
+    this.leftLeg.position.set(-0.12, 0.2, 0)
     this.leftLeg.parent = this.node
+    applyFlat(this.leftLeg)
+    this.baseLeftLegY = this.leftLeg.position.y
 
-    // Right leg (cylinder)
-    this.rightLeg = MeshBuilder.CreateCylinder(
+    // Right leg (box)
+    this.rightLeg = MeshBuilder.CreateBox(
       'playerRightLeg',
-      { height: 0.25, diameter: 0.12, tessellation: 6 },
+      { height: 0.32, width: 0.13, depth: 0.15 },
       this.scene
     )
     this.rightLeg.material = legMat
-    this.rightLeg.position.set(0.1, 0.125, 0)
+    this.rightLeg.position.set(0.12, 0.2, 0)
     this.rightLeg.parent = this.node
+    applyFlat(this.rightLeg)
+    this.baseRightLegY = this.rightLeg.position.y
+
+    // Arms (simple blocks)
+    this.leftArm = MeshBuilder.CreateBox(
+      'playerLeftArm',
+      { height: 0.34, width: 0.11, depth: 0.15 },
+      this.scene
+    )
+    this.leftArm.material = skinMat
+    this.leftArm.position.set(-0.29, 0.6, 0)
+    this.leftArm.parent = this.node
+    applyFlat(this.leftArm)
+    this.baseLeftArmY = this.leftArm.position.y
+
+    this.rightArm = MeshBuilder.CreateBox(
+      'playerRightArm',
+      { height: 0.34, width: 0.11, depth: 0.15 },
+      this.scene
+    )
+    this.rightArm.material = skinMat
+    this.rightArm.position.set(0.29, 0.6, 0)
+    this.rightArm.parent = this.node
+    applyFlat(this.rightArm)
+    this.baseRightArmY = this.rightArm.position.y
+
+    // Boots
+    const bootMat = new StandardMaterial('playerBootMat', this.scene)
+    bootMat.diffuseColor = bootColor
+    bootMat.specularColor = Color3.Black()
+
+    const leftBoot = MeshBuilder.CreateBox(
+      'playerLeftBoot',
+      { height: 0.1, width: 0.17, depth: 0.22 },
+      this.scene
+    )
+    leftBoot.material = bootMat
+    leftBoot.position.set(-0.12, 0.05, 0.03)
+    leftBoot.parent = this.node
+    applyFlat(leftBoot)
+
+    const rightBoot = leftBoot.clone('playerRightBoot')
+    if (rightBoot) {
+      rightBoot.position.set(0.11, 0.04, 0.02)
+      rightBoot.parent = this.node
+    }
+
+    // Hair cap
+    const hair = MeshBuilder.CreateBox(
+      'playerHair',
+      { height: 0.1, width: 0.36, depth: 0.36 },
+      this.scene
+    )
+    const hairMat = new StandardMaterial('playerHairMat', this.scene)
+    hairMat.diffuseColor = hairColor
+    hairMat.specularColor = Color3.Black()
+    hair.material = hairMat
+    hair.position.set(0, 1.07, 0)
+    hair.parent = this.node
+    applyFlat(hair)
 
     // Create action indicator spheres (hidden by default)
     const indicatorMat = new StandardMaterial('actionIndicatorMat', this.scene)
@@ -165,6 +246,19 @@ export class Player {
     this.onPathComplete = onComplete
   }
 
+  setHeightProvider(provider: (tileX: number, tileY: number) => number) {
+    this.heightProvider = provider
+    this.updateNodePosition()
+  }
+
+  setActionTarget(target: Position | null) {
+    this.actionTarget = target ? { ...target } : null
+  }
+
+  setActionMode(mode: 'skilling' | 'combat' | 'cooking' | 'chopping' | null) {
+    this.actionMode = mode
+  }
+
   setActioning(isActioning: boolean) {
     this.isActioning = isActioning
     if (!isActioning) {
@@ -181,6 +275,10 @@ export class Player {
     }
 
     if (!this.currentTarget) {
+      this.walkTime = 0
+      this.updateWalkPose(0)
+      this.updateActionPose(delta)
+      this.updateActionFacing()
       if (this.isMoving) {
         this.isMoving = false
         // Call completion callback
@@ -200,8 +298,8 @@ export class Player {
     const newDirection = getDirection(this.position, this.currentTarget)
     if (newDirection !== this.direction) {
       this.direction = newDirection
-      this.updateFacing()
     }
+    this.updateFacingFromVector(dx, dy)
 
     if (distance < MOVE_SPEED * delta) {
       this.position.x = this.currentTarget.x
@@ -225,32 +323,117 @@ export class Player {
       this.isMoving = true
     }
 
+    this.walkTime += delta
+    this.updateWalkPose(this.walkTime)
+    this.updateActionPose(delta)
+    this.updateActionFacing()
     this.updateNodePosition()
   }
 
-  private updateFacing() {
-    // Rotate character to face direction
-    switch (this.direction) {
-      case Direction.DOWN:
-        this.node.rotation.y = 0
-        break
-      case Direction.UP:
-        this.node.rotation.y = Math.PI
-        break
-      case Direction.LEFT:
-        this.node.rotation.y = Math.PI / 2
-        break
-      case Direction.RIGHT:
-        this.node.rotation.y = -Math.PI / 2
-        break
+  private updateWalkPose(time: number) {
+    if (!this.isMoving) {
+      if (!this.isActioning) {
+        if (this.leftLeg) this.leftLeg.rotation.x = 0
+        if (this.rightLeg) this.rightLeg.rotation.x = 0
+        if (this.leftArm) this.leftArm.rotation.x = 0
+        if (this.rightArm) this.rightArm.rotation.x = 0
+      }
+      return
     }
+
+    const speed = 6
+    const swing = Math.sin(time * speed)
+    const legSwing = swing * 0.6
+    const armSwing = -swing * 0.5
+
+    if (this.leftLeg) this.leftLeg.rotation.x = legSwing
+    if (this.rightLeg) this.rightLeg.rotation.x = -legSwing
+    if (this.leftArm) this.leftArm.rotation.x = armSwing
+    if (this.rightArm) this.rightArm.rotation.x = -armSwing
+  }
+
+  private updateActionPose(delta: number) {
+    if (!this.isActioning || this.isMoving) {
+      this.actionTime = 0
+      if (!this.isMoving) {
+        if (this.leftArm) this.leftArm.rotation.x = 0
+        if (this.rightArm) this.rightArm.rotation.x = 0
+        if (this.leftLeg) this.leftLeg.rotation.x = 0
+        if (this.rightLeg) this.rightLeg.rotation.x = 0
+        if (this.body) this.body.rotation.x = 0
+        if (this.body) this.body.position.y = this.baseBodyY
+        if (this.head) this.head.position.y = this.baseHeadY
+        if (this.leftLeg) this.leftLeg.position.y = this.baseLeftLegY
+        if (this.rightLeg) this.rightLeg.position.y = this.baseRightLegY
+        if (this.leftArm) this.leftArm.position.y = this.baseLeftArmY
+        if (this.rightArm) this.rightArm.position.y = this.baseRightArmY
+      }
+      return
+    }
+
+    this.actionTime += delta
+    const mode = this.actionMode ?? 'skilling'
+    const speed = mode === 'combat' ? 7 : mode === 'cooking' ? 3.5 : mode === 'chopping' ? 6 : 5
+    const swing = Math.sin(this.actionTime * speed)
+
+    if (mode === 'combat') {
+      if (this.leftArm) this.leftArm.rotation.x = -0.6 + swing * 0.55
+      if (this.rightArm) this.rightArm.rotation.x = -0.2 - swing * 0.4
+      if (this.body) this.body.rotation.x = swing * 0.12
+      if (this.leftLeg) this.leftLeg.rotation.x = -swing * 0.15
+      if (this.rightLeg) this.rightLeg.rotation.x = swing * 0.15
+    } else if (mode === 'cooking') {
+      const bob = Math.sin(this.actionTime * 2.5) * 0.02
+      if (this.body) this.body.position.y = this.baseBodyY - 0.16 + bob
+      if (this.head) this.head.position.y = this.baseHeadY - 0.16 + bob
+      if (this.leftLeg) this.leftLeg.position.y = this.baseLeftLegY - 0.1
+      if (this.rightLeg) this.rightLeg.position.y = this.baseRightLegY - 0.1
+      if (this.leftArm) this.leftArm.position.y = this.baseLeftArmY - 0.08
+      if (this.rightArm) this.rightArm.position.y = this.baseRightArmY - 0.08
+      if (this.leftArm) this.leftArm.rotation.x = -1.1 + swing * 0.3
+      if (this.rightArm) this.rightArm.rotation.x = -1.1 - swing * 0.3
+      if (this.body) this.body.rotation.x = -0.35 + swing * 0.08
+      if (this.leftLeg) this.leftLeg.rotation.x = 0.9
+      if (this.rightLeg) this.rightLeg.rotation.x = 0.9
+    } else if (mode === 'chopping') {
+      if (this.leftArm) this.leftArm.rotation.x = -0.8 + swing * 0.7
+      if (this.rightArm) this.rightArm.rotation.x = -0.8 - swing * 0.7
+      if (this.body) this.body.rotation.x = -0.05 + swing * 0.1
+      if (this.leftLeg) this.leftLeg.rotation.x = -swing * 0.12
+      if (this.rightLeg) this.rightLeg.rotation.x = swing * 0.12
+    } else {
+      if (this.leftArm) this.leftArm.rotation.x = -0.4 + swing * 0.35
+      if (this.rightArm) this.rightArm.rotation.x = -0.4 - swing * 0.35
+      if (this.body) this.body.rotation.x = swing * 0.08
+      if (this.leftLeg) this.leftLeg.rotation.x = -swing * 0.1
+      if (this.rightLeg) this.rightLeg.rotation.x = swing * 0.1
+    }
+  }
+
+  private updateActionFacing() {
+    if (!this.isActioning || this.isMoving || !this.actionTarget) {
+      return
+    }
+    const dx = this.actionTarget.x - this.position.x
+    const dy = this.actionTarget.y - this.position.y
+    this.updateFacingFromVector(dx, dy)
+  }
+
+  private updateFacingFromVector(dx: number, dy: number) {
+    if (dx === 0 && dy === 0) return
+    const ang = Math.atan2(dx, dy)
+    const step = Math.PI / 4
+    this.node.rotation.y = Math.round(ang / step) * step
   }
 
   private updateNodePosition() {
     // Map 2D position to 3D: x stays x, y becomes z
     // Scale down from pixel coordinates to 3D world units
-    const scale = 1 / 32 // TILE_SIZE = 32, so 1 tile = 1 unit in 3D
-    this.node.position = new Vector3(this.position.x * scale, 0, this.position.y * scale)
+    const scale = 1 / TILE_SIZE // TILE_SIZE = 32, so 1 tile = 1 unit in 3D
+    const tileX = Math.floor(this.position.x / TILE_SIZE)
+    const tileY = Math.floor(this.position.y / TILE_SIZE)
+    const heightY = this.heightProvider ? this.heightProvider(tileX, tileY) : 0
+    this.node.position = new Vector3(this.position.x * scale, heightY, this.position.y * scale)
   }
 
   dispose() {

@@ -1,11 +1,12 @@
-import { useState, useCallback } from 'react'
-import { ItemType, ITEM_DEFINITIONS } from '@realm/shared'
+import { useState, useCallback, useMemo } from 'react'
+import { ItemType, ITEM_DEFINITIONS, isFood } from '@realm/shared'
 
 interface InventoryPanelProps {
   items: Array<{ itemType: string; quantity: number }>
   selectedIndex: number | null
   onSelectItem: (index: number | null) => void
   onDropItem: (index: number) => void
+  onEatFood?: (index: number) => void
 }
 
 const MAX_SLOTS = 28
@@ -14,7 +15,8 @@ export function InventoryPanel({
   items,
   selectedIndex,
   onSelectItem,
-  onDropItem
+  onDropItem,
+  onEatFood
 }: InventoryPanelProps) {
   const [expanded, setExpanded] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(
@@ -22,10 +24,13 @@ export function InventoryPanel({
   )
 
   // Create 28 slots, filling with items
-  const slots: Array<{ itemType: string; quantity: number } | null> = []
-  for (let i = 0; i < MAX_SLOTS; i++) {
-    slots.push(items[i] || null)
-  }
+  const slots = useMemo(() => {
+    const result: Array<{ itemType: string; quantity: number } | null> = []
+    for (let i = 0; i < MAX_SLOTS; i++) {
+      result.push(items[i] || null)
+    }
+    return result
+  }, [items])
 
   const usedSlots = items.length
 
@@ -60,6 +65,13 @@ export function InventoryPanel({
       }
     }
   }, [contextMenu, onDropItem, selectedIndex, onSelectItem])
+
+  const handleEat = useCallback(() => {
+    if (contextMenu !== null && onEatFood) {
+      onEatFood(contextMenu.index)
+      setContextMenu(null)
+    }
+  }, [contextMenu, onEatFood])
 
   // Close context menu when clicking elsewhere
   const handlePanelClick = useCallback(() => {
@@ -210,6 +222,35 @@ export function InventoryPanel({
             zIndex: 1000
           }}
         >
+          {/* Eat option - only show for food items */}
+          {items[contextMenu.index] &&
+            isFood(items[contextMenu.index].itemType as ItemType) && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleEat()
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#22c55e',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                Eat
+              </button>
+            )}
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -264,7 +305,13 @@ function getItemIcon(itemType: string): string {
     [ItemType.COOKED_TROUT]: '🍣',
     [ItemType.COOKED_SALMON]: '🍣',
     [ItemType.COOKED_LOBSTER]: '🦞',
-    [ItemType.BURNT_FISH]: '💨'
+    [ItemType.BURNT_FISH]: '💨',
+    [ItemType.BONES]: '🦴',
+    [ItemType.COWHIDE]: '🟫',
+    [ItemType.RAW_CHICKEN]: '🍗',
+    [ItemType.RAW_BEEF]: '🥩',
+    [ItemType.COOKED_CHICKEN]: '🍗',
+    [ItemType.COOKED_BEEF]: '🥩'
   }
   return icons[itemType] || '📦'
 }

@@ -1,11 +1,4 @@
-import {
-  Scene,
-  MeshBuilder,
-  StandardMaterial,
-  DynamicTexture,
-  Color3,
-  Mesh
-} from '@babylonjs/core'
+import { Scene, MeshBuilder, StandardMaterial, Color3, Mesh, Vector3 } from '@babylonjs/core'
 import { TILE_SIZE, TileType, WALKABLE_TILES } from '@realm/shared'
 
 // Tile colors (RGB normalized 0-1)
@@ -22,8 +15,9 @@ const TILE_COLORS: Record<TileType, { r: number; g: number; b: number }> = {
 const MAP_WIDTH = 40
 const MAP_HEIGHT = 30
 
-// Texture resolution multiplier (pixels per tile on texture)
-const TEXTURE_PIXELS_PER_TILE = 16
+export const LEVEL_H = 0.25
+export const TILE_THICK = 0.08
+const CLIFF_THICK = 0.08
 
 export class TilemapRenderer {
   public worldWidth: number
@@ -31,8 +25,8 @@ export class TilemapRenderer {
 
   private scene: Scene
   private tiles: TileType[][] = []
-  private groundMesh!: Mesh
-  private texture!: DynamicTexture
+  private heights: number[][] = []
+  private terrainMeshes: Mesh[] = []
 
   constructor(scene: Scene) {
     this.scene = scene
@@ -42,8 +36,7 @@ export class TilemapRenderer {
 
   async init() {
     this.generateTestMap()
-    this.createGroundMesh()
-    this.renderTilesToTexture()
+    this.buildTerrainMeshes()
   }
 
   private generateTestMap() {
@@ -51,6 +44,19 @@ export class TilemapRenderer {
     this.tiles = Array(MAP_HEIGHT)
       .fill(null)
       .map(() => Array(MAP_WIDTH).fill(TileType.GRASS))
+
+    this.heights = Array(MAP_HEIGHT)
+      .fill(null)
+      .map(() => Array(MAP_WIDTH).fill(0))
+
+    // Example plateau
+    for (let y = 14; y < 22; y++) {
+      for (let x = 18; x < 30; x++) {
+        this.heights[y][x] = 1
+      }
+    }
+    // higher bump
+    this.heights[18][24] = 2
 
     // Water border
     for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -122,90 +128,110 @@ export class TilemapRenderer {
     this.tiles[12][12] = TileType.STONE
   }
 
-  private createGroundMesh() {
-    // Ground size in 3D units (1 tile = 1 unit)
-    const groundWidth = MAP_WIDTH
-    const groundHeight = MAP_HEIGHT
+  private buildTerrainMeshes() {
+    this.terrainMeshes.forEach((mesh) => mesh.dispose())
+    this.terrainMeshes = []
 
-    // Create the ground plane
-    this.groundMesh = MeshBuilder.CreateGround(
-      'ground',
-      {
-        width: groundWidth,
-        height: groundHeight,
-        subdivisions: 1
-      },
-      this.scene
-    )
+    const tileBaseMeshes: Map<TileType, Mesh> = new Map()
 
-    // Position ground so (0,0) tile corner is at world origin
-    // The ground mesh is centered, so we offset it
-    this.groundMesh.position.x = groundWidth / 2
-    this.groundMesh.position.z = groundHeight / 2
-
-    // Create dynamic texture
-    const textureWidth = MAP_WIDTH * TEXTURE_PIXELS_PER_TILE
-    const textureHeight = MAP_HEIGHT * TEXTURE_PIXELS_PER_TILE
-    this.texture = new DynamicTexture('groundTexture', { width: textureWidth, height: textureHeight }, this.scene, false)
-
-    // Create material with the texture
-    const groundMat = new StandardMaterial('groundMat', this.scene)
-    groundMat.diffuseTexture = this.texture
-    groundMat.specularColor = Color3.Black()
-    this.groundMesh.material = groundMat
-  }
-
-  private renderTilesToTexture() {
-    const ctx = this.texture.getContext()
-    const ppt = TEXTURE_PIXELS_PER_TILE // pixels per tile
+    for (const tileType of Object.values(TileType).filter(
+      (v) => typeof v === 'number'
+    ) as number[]) {
+      const mesh = MeshBuilder.CreateBox(
+        `tile_${tileType}`,
+        { width: 1, height: TILE_THICK, depth: 1 },
+        this.scene
+      )
+      const color = TILE_COLORS[tileType as TileType]
+      const mat = new StandardMaterial(`tileMat_${tileType}`, this.scene)
+      mat.diffuseColor = new Color3(color.r, color.g, color.b)
+      mat.specularColor = Color3.Black()
+      mesh.material = mat
+      mesh.isPickable = true
+      mesh.isVisible = false
+      mesh.metadata = { terrainType: 'tile' }
+      tileBaseMeshes.set(tileType as TileType, mesh)
+      this.terrainMeshes.push(mesh)
+    }
 
     for (let y = 0; y < MAP_HEIGHT; y++) {
       for (let x = 0; x < MAP_WIDTH; x++) {
         const tileType = this.tiles[y][x]
-        const color = TILE_COLORS[tileType]
+        const height = this.heights[y][x]
+        const mesh = tileBaseMeshes.get(tileType)
+        if (!mesh) continue
 
-        // Convert to CSS color
-        const r = Math.floor(color.r * 255)
-        const g = Math.floor(color.g * 255)
-        const b = Math.floor(color.b * 255)
-
-        // Pixel position (flip Y for texture coords)
-        const px = x * ppt
-        const py = (MAP_HEIGHT - 1 - y) * ppt
-
-        // Draw base tile
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`
-        ctx.fillRect(px, py, ppt, ppt)
-
-        // Subtle grid lines
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'
-        ctx.lineWidth = 1
-        ctx.strokeRect(px, py, ppt, ppt)
-
-        // Water detail
-        if (tileType === TileType.WATER) {
-          ctx.fillStyle = 'rgba(90, 159, 212, 0.5)' // #5a9fd4
-          ctx.fillRect(px + 2, py + 4, 5, 1)
-          ctx.fillRect(px + 9, py + 8, 5, 1)
-        }
-
-        // Stone detail
-        if (tileType === TileType.STONE) {
-          ctx.fillStyle = 'rgba(106, 106, 106, 0.8)' // #6a6a6a
-          ctx.beginPath()
-          ctx.arc(px + 4, py + 6, 2, 0, Math.PI * 2)
-          ctx.fill()
-          ctx.beginPath()
-          ctx.arc(px + 10, py + 4, 1.5, 0, Math.PI * 2)
-          ctx.fill()
-          ctx.beginPath()
-          ctx.arc(px + 12, py + 10, 2.5, 0, Math.PI * 2)
-          ctx.fill()
-        }
+        const instance = mesh.createInstance(`tile_${tileType}_${x}_${y}`)
+        instance.isPickable = true
+        instance.position = new Vector3(x + 0.5, height * LEVEL_H + TILE_THICK / 2, y + 0.5)
       }
     }
 
-    this.texture.update()
+    this.buildCliffMeshes()
+  }
+
+  private buildCliffMeshes() {
+    const cliffMat = new StandardMaterial('cliffMat', this.scene)
+    cliffMat.diffuseColor = new Color3(0.35, 0.35, 0.35)
+    cliffMat.specularColor = Color3.Black()
+
+    const faceMesh = MeshBuilder.CreateBox(
+      'cliffFace',
+      { width: 1, height: 1, depth: CLIFF_THICK },
+      this.scene
+    )
+    faceMesh.material = cliffMat
+    faceMesh.isPickable = false
+    faceMesh.isVisible = false
+    this.terrainMeshes.push(faceMesh)
+
+    const addFace = (
+      posX: number,
+      posY: number,
+      posZ: number,
+      scaleX: number,
+      scaleY: number,
+      scaleZ: number
+    ) => {
+      const instance = faceMesh.createInstance(`cliff_${posX}_${posZ}_${posY}`)
+      instance.position = new Vector3(posX, posY, posZ)
+      instance.scaling = new Vector3(scaleX, scaleY, scaleZ)
+    }
+
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+      for (let x = 0; x < MAP_WIDTH; x++) {
+        const h0 = this.heights[y][x]
+        const neighbors = [
+          { dx: 0, dy: -1, edge: 'north' },
+          { dx: 0, dy: 1, edge: 'south' },
+          { dx: -1, dy: 0, edge: 'west' },
+          { dx: 1, dy: 0, edge: 'east' }
+        ]
+
+        for (const n of neighbors) {
+          const nx = x + n.dx
+          const ny = y + n.dy
+          const h1 =
+            nx < 0 || nx >= MAP_WIDTH || ny < 0 || ny >= MAP_HEIGHT ? 0 : this.heights[ny][nx]
+          const diff = h0 - h1
+          if (diff <= 0) continue
+
+          const faceHeight = diff * LEVEL_H
+          const bottomY = h1 * LEVEL_H
+          const centerY = bottomY + faceHeight / 2
+
+          if (n.edge === 'north') {
+            addFace(x + 0.5, centerY, y + 0, 1, faceHeight, CLIFF_THICK)
+          } else if (n.edge === 'south') {
+            addFace(x + 0.5, centerY, y + 1, 1, faceHeight, CLIFF_THICK)
+          } else if (n.edge === 'west') {
+            addFace(x + 0, centerY, y + 0.5, CLIFF_THICK, faceHeight, 1)
+          } else if (n.edge === 'east') {
+            addFace(x + 1, centerY, y + 0.5, CLIFF_THICK, faceHeight, 1)
+          }
+        }
+      }
+    }
   }
 
   isWalkable(tileX: number, tileY: number): boolean {
@@ -218,6 +244,21 @@ export class TilemapRenderer {
 
   getCollisionGrid(): number[][] {
     return this.tiles.map((row) => row.map((tile) => (WALKABLE_TILES.has(tile) ? 0 : 1)))
+  }
+
+  getHeight(tileX: number, tileY: number): number {
+    if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) {
+      return 0
+    }
+    return this.heights[tileY][tileX]
+  }
+
+  getHeights(): number[][] {
+    return this.heights.map((row) => [...row])
+  }
+
+  getTerrainMeshes(): Mesh[] {
+    return this.terrainMeshes
   }
 
   getTileAt(tileX: number, tileY: number): TileType | null {
