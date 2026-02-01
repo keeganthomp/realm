@@ -3,6 +3,7 @@ import {
   Engine,
   Scene,
   ArcRotateCamera,
+  ArcRotateCameraPointersInput,
   HemisphericLight,
   Vector3,
   Color4,
@@ -20,8 +21,9 @@ import { NpcEntity } from './entities/NpcEntity'
 import { TilemapRenderer, LEVEL_H, TILE_THICK } from './systems/TilemapRenderer'
 import { Camera } from './systems/Camera'
 import { Pathfinding } from './systems/Pathfinding'
-import { worldToTile, tileToWorld, WorldObjectType, NpcType, TILE_SIZE } from '@realm/shared'
-import type { Position, Direction } from '@realm/shared'
+import { worldToTile, tileToWorld, WorldObjectType, NpcType, TILE_SIZE, TileType } from '@realm/shared'
+import type { Position, Direction, ChunkData } from '@realm/shared'
+import { Editor } from './editor/Editor'
 
 export class Game {
   private engine!: Engine
@@ -42,14 +44,20 @@ export class Game {
   private hoverUi!: AdvancedDynamicTexture
   private hoverLabel!: TextBlock
   private lastActionTarget: Position | null = null
-  private panKeys: Set<string> = new Set()
+  private cameraKeys: Set<string> = new Set()
   private skillingActionActive: boolean = false
   private combatTargetId: string | null = null
   private chunkObjects: Map<string, string[]> = new Map()
   private lastCameraX: number = -1
   private lastCameraY: number = -1
 
+  // Editor
+  private editor: Editor | null = null
+  private pointerDown = false
+  private lastPointerButton = 0
+
   // Callbacks
+  public onEditorStateChange?: (active: boolean) => void
   public onLocalPlayerMove?: (position: Position, path: Position[]) => void
   public onWorldObjectClick?: (objectId: string, objectPosition: Position) => void
   public onNpcClick?: (npcId: string, npcPosition: Position) => void
@@ -67,28 +75,56 @@ export class Game {
     this.scene = new Scene(this.engine)
     this.scene.clearColor = new Color4(0.1, 0.1, 0.18, 1) // #1a1a2e
 
-    // Setup perspective camera with OSRS-like angle
+    // Setup OSRS-style camera
+    // Start at player spawn position (tile 10,10)
+    const startX = 10 + 0.5 // center of tile
+    const startZ = 10 + 0.5
+    const initialTarget = new Vector3(startX, 0, startZ)
+
     this.arcCamera = new ArcRotateCamera(
       'camera',
-      -Math.PI / 4, // 45° yaw
-      Math.PI / 3, // 60° pitch
-      22, // radius (zoom)
-      Vector3.Zero(),
+      -Math.PI / 4, // Alpha (yaw): 45° - south-west view like OSRS default
+      Math.PI / 4, // Beta (pitch): 45° from vertical - classic isometric-ish
+      18, // Radius (zoom): distance from target
+      initialTarget,
       this.scene
     )
 
-    this.arcCamera.fov = 0.7
-    this.arcCamera.lowerBetaLimit = 0.95
-    this.arcCamera.upperBetaLimit = 1.25
-    this.arcCamera.lowerRadiusLimit = 14
-    this.arcCamera.upperRadiusLimit = 34
+    // OSRS-style camera limits
+    this.arcCamera.fov = 0.8
+
+    // Beta (pitch) limits: ~25° to ~65° from horizontal
+    // Lower beta = more top-down, higher beta = more horizontal
+    this.arcCamera.lowerBetaLimit = 0.4 // ~23° - nearly top-down
+    this.arcCamera.upperBetaLimit = 1.2 // ~69° - more horizontal view
+
+    // Zoom limits
+    this.arcCamera.lowerRadiusLimit = 8 // Closest zoom
+    this.arcCamera.upperRadiusLimit = 40 // Furthest zoom
+
+    // Disable panning (OSRS doesn't have free pan, camera follows player)
     this.arcCamera.panningSensibility = 0
     this.arcCamera.allowUpsideDown = false
-    this.arcCamera.inertia = 0.85
 
-    // Disable direct user control; we'll manage camera in code
+    // Smooth camera movement
+    this.arcCamera.inertia = 0.7
+
+    // Enable OSRS-style controls: middle mouse to rotate, scroll to zoom
     this.arcCamera.attachControl(canvas, true)
     this.arcCamera.inputs.clear()
+
+    // Add mouse wheel for zoom
+    this.arcCamera.inputs.addMouseWheel()
+
+    // Add pointer input for rotation (middle mouse button)
+    this.arcCamera.inputs.addPointers()
+
+    // Configure to only rotate with middle mouse button (button 1)
+    const pointerInput = this.arcCamera.inputs.attached
+      .pointers as ArcRotateCameraPointersInput | undefined
+    if (pointerInput) {
+      pointerInput.buttons = [1] // Middle mouse button only for rotation
+    }
 
     // Add ambient lighting
     const light = new HemisphericLight('light', new Vector3(0.5, 1, 0.5), this.scene)
@@ -96,11 +132,70 @@ export class Game {
 
     await this.initSystems()
     await this.initPlayer()
+    this.initEditor()
     this.setupInput()
 
     window.addEventListener('resize', this.handleResize)
     window.addEventListener('keydown', this.handleKeyDown)
     window.addEventListener('keyup', this.handleKeyUp)
+  }
+
+  private initEditor() {
+    this.editor = new Editor(this.scene, {
+      onTileChange: (worldX, worldY, tileType) => {
+        this.tilemap.setTileAt(worldX, worldY, tileType)
+      },
+      onHeightChange: (worldX, worldY, height) => {
+        this.tilemap.setHeightAt(worldX, worldY, height)
+      },
+      onObjectAdd: (id, objectType, worldX, worldY) => {
+        this.addWorldObject(id, objectType, worldX, worldY)
+      },
+      onObjectRemove: (id) => {
+        this.removeWorldObject(id)
+      },
+      onChunkApply: (chunk) => {
+        this.applyEditorChunk(chunk)
+      },
+      getHeight: (tileX, tileY) => this.tilemap.getHeight(tileX, tileY),
+      getTile: (tileX, tileY) => this.tilemap.getTileAt(tileX, tileY),
+      getPlayerTile: () => worldToTile(this.player.position)
+    })
+
+    // Subscribe to editor state changes
+    this.editor.state.subscribe((state) => {
+      this.onEditorStateChange?.(state.active)
+    })
+  }
+
+  private applyEditorChunk(chunk: ChunkData) {
+    // Remove existing chunk if present
+    const key = `${chunk.chunkX},${chunk.chunkY}`
+    console.log(`[Game] applyEditorChunk: key=${key}`)
+    const existingIds = this.chunkObjects.get(key)
+    if (existingIds) {
+      console.log(`[Game] Removing ${existingIds.length} existing objects`)
+      for (const id of existingIds) {
+        this.removeWorldObject(id)
+      }
+    }
+    this.tilemap.removeChunk(key)
+    console.log(`[Game] Removed chunk, now applying new chunk`)
+
+    // Apply new chunk
+    this.tilemap.applyChunk(chunk)
+    console.log(`[Game] Chunk applied`)
+    const ids: string[] = []
+    for (const obj of chunk.objects) {
+      this.addWorldObject(obj.id, obj.objectType, obj.x, obj.y)
+      if (obj.depleted) {
+        this.updateWorldObject(obj.id, true)
+      }
+      ids.push(obj.id)
+    }
+    this.chunkObjects.set(key, ids)
+    this.refreshNavigationGrid()
+    this.camera.setPickableMeshes(this.tilemap.getTerrainMeshes())
   }
 
   private async initSystems() {
@@ -137,17 +232,68 @@ export class Game {
   private setupInput() {
     this.scene.onPointerObservable.add((pointerInfo) => {
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
+        const e = pointerInfo.event as PointerEvent
         // Right click for context menu prevention
-        if (pointerInfo.event.button === 2) {
-          pointerInfo.event.preventDefault()
+        if (e.button === 2) {
+          e.preventDefault()
         }
-        this.processClick(pointerInfo.event as PointerEvent)
+
+        this.pointerDown = true
+        this.lastPointerButton = e.button
+
+        // Route to editor if active
+        if (this.editor?.isActive()) {
+          const worldPos = this.camera.screenToWorld(e.clientX, e.clientY)
+          if (worldPos) {
+            const tile = worldToTile(worldPos)
+            this.editor.handlePointerDown(tile.tileX, tile.tileY, e.button, e.shiftKey, e.ctrlKey)
+          } else {
+            console.warn('[Editor] screenToWorld returned null - no terrain hit')
+          }
+          return
+        }
+
+        this.processClick(e)
       }
     })
 
     this.scene.onPointerObservable.add((pointerInfo) => {
       if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
-        this.processHover(pointerInfo.event as PointerEvent)
+        const e = pointerInfo.event as PointerEvent
+
+        // Route to editor if active
+        if (this.editor?.isActive()) {
+          const worldPos = this.camera.screenToWorld(e.clientX, e.clientY)
+          if (worldPos) {
+            const tile = worldToTile(worldPos)
+            this.editor.handlePointerMove(
+              tile.tileX,
+              tile.tileY,
+              this.pointerDown ? this.lastPointerButton : -1,
+              e.shiftKey,
+              e.ctrlKey
+            )
+          }
+          return
+        }
+
+        this.processHover(e)
+      }
+    })
+
+    this.scene.onPointerObservable.add((pointerInfo) => {
+      if (pointerInfo.type === PointerEventTypes.POINTERUP) {
+        const e = pointerInfo.event as PointerEvent
+        this.pointerDown = false
+
+        // Route to editor if active
+        if (this.editor?.isActive()) {
+          const worldPos = this.camera.screenToWorld(e.clientX, e.clientY)
+          if (worldPos) {
+            const tile = worldToTile(worldPos)
+            this.editor.handlePointerUp(tile.tileX, tile.tileY, e.button, e.shiftKey, e.ctrlKey)
+          }
+        }
       }
     })
 
@@ -429,18 +575,38 @@ export class Game {
   }
 
   private handleKeyDown = (e: KeyboardEvent) => {
+    // Backtick toggles editor mode
+    if (e.key === '`') {
+      this.editor?.toggle()
+      e.preventDefault()
+      return
+    }
+
+    // Route to editor if active
+    if (this.editor?.isActive()) {
+      const handled = this.editor.handleKeyDown(e.key, e.ctrlKey, e.shiftKey)
+      if (handled) {
+        e.preventDefault()
+        return
+      }
+    }
+
+    // Q/E for quick 45° rotation snaps (like OSRS compass clicks)
     if (e.key.toLowerCase() === 'q') {
       this.arcCamera.alpha -= this.rotationStep
     } else if (e.key.toLowerCase() === 'e') {
       this.arcCamera.alpha += this.rotationStep
-    } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-      this.panKeys.add(e.key)
+    }
+
+    // Arrow keys for smooth camera rotation (OSRS style)
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      this.cameraKeys.add(e.key)
     }
   }
 
   private handleKeyUp = (e: KeyboardEvent) => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-      this.panKeys.delete(e.key)
+      this.cameraKeys.delete(e.key)
     }
   }
 
@@ -694,16 +860,31 @@ export class Game {
         this.lastCameraY = this.player.position.y
       }
 
-      if (this.panKeys.size > 0) {
-        const panSpeed = 6
-        let dx = 0
-        let dz = 0
-        if (this.panKeys.has('ArrowLeft')) dx -= panSpeed * delta * 0.1
-        if (this.panKeys.has('ArrowRight')) dx += panSpeed * delta * 0.1
-        if (this.panKeys.has('ArrowUp')) dz -= panSpeed * delta * 0.1
-        if (this.panKeys.has('ArrowDown')) dz += panSpeed * delta * 0.1
-        if (dx !== 0 || dz !== 0) {
-          this.camera.nudgePan(dx, dz)
+      // OSRS-style arrow key camera rotation
+      if (this.cameraKeys.size > 0) {
+        const rotateSpeed = 0.03 * delta
+        const pitchSpeed = 0.015 * delta
+
+        // Left/Right arrows rotate yaw (alpha)
+        if (this.cameraKeys.has('ArrowLeft')) {
+          this.arcCamera.alpha += rotateSpeed
+        }
+        if (this.cameraKeys.has('ArrowRight')) {
+          this.arcCamera.alpha -= rotateSpeed
+        }
+
+        // Up/Down arrows adjust pitch (beta)
+        if (this.cameraKeys.has('ArrowUp')) {
+          this.arcCamera.beta = Math.max(
+            this.arcCamera.lowerBetaLimit ?? 0.4,
+            this.arcCamera.beta - pitchSpeed
+          )
+        }
+        if (this.cameraKeys.has('ArrowDown')) {
+          this.arcCamera.beta = Math.min(
+            this.arcCamera.upperBetaLimit ?? 1.2,
+            this.arcCamera.beta + pitchSpeed
+          )
         }
       }
 
@@ -717,7 +898,13 @@ export class Game {
     window.removeEventListener('keyup', this.handleKeyUp)
     this.hoverIndicator?.dispose()
     this.hoverUi?.dispose()
+    this.editor?.destroy()
     this.engine.dispose()
+  }
+
+  // Editor access
+  getEditor(): Editor | null {
+    return this.editor
   }
 
   private createHoverIndicator() {

@@ -7,20 +7,19 @@ export class Camera {
   private screenHeight: number
   private worldWidth: number
   private worldHeight: number
-  private smoothing: number = 0.1
 
   private arcCamera: ArcRotateCamera
   private scene: Scene
   private pickableMeshes: Set<AbstractMesh> | null = null
-  private panOffsetX: number = 0
-  private panOffsetZ: number = 0
   private cachedTarget: Vector3 = new Vector3()
-  private cachedOrthoWidth: number = 0
-  private cachedOrthoHeight: number = 0
 
   // Current camera target in 3D world coordinates
   private targetX: number = 0
   private targetZ: number = 0
+  private initialized: boolean = false
+
+  // Smoothing factor (0 = instant, 1 = no movement)
+  private smoothing: number = 0.12
 
   constructor(
     screenWidth: number,
@@ -44,39 +43,15 @@ export class Camera {
     const target3DX = target.x * scale
     const target3DZ = target.y * scale
 
-    // Smooth interpolation
-    this.targetX += (target3DX - this.targetX) * this.smoothing
-    this.targetZ += (target3DZ - this.targetZ) * this.smoothing
-
-    // Apply pan offset
-    this.targetX += this.panOffsetX
-    this.targetZ += this.panOffsetZ
-
-    // Clamp to world bounds (in 3D units)
-    const worldWidth3D = this.worldWidth / TILE_SIZE
-    const worldHeight3D = this.worldHeight / TILE_SIZE
-
-    // Camera view bounds depend on ortho size
-    if (this.cachedOrthoWidth === 0 && this.cachedOrthoHeight === 0) {
-      this.cachedOrthoWidth = (this.arcCamera.orthoRight ?? 0) - (this.arcCamera.orthoLeft ?? 0)
-      this.cachedOrthoHeight = (this.arcCamera.orthoTop ?? 0) - (this.arcCamera.orthoBottom ?? 0)
-    }
-    const orthoWidth = this.cachedOrthoWidth
-    const orthoHeight = this.cachedOrthoHeight
-
-    // Adjust clamping for isometric view
-    const halfViewX = orthoWidth / 2
-    const halfViewZ = orthoHeight / 2
-
-    this.targetX = Math.max(halfViewX, Math.min(this.targetX, worldWidth3D - halfViewX))
-    this.targetZ = Math.max(halfViewZ, Math.min(this.targetZ, worldHeight3D - halfViewZ))
-
-    // Handle case where world is smaller than view
-    if (worldWidth3D < orthoWidth) {
-      this.targetX = worldWidth3D / 2
-    }
-    if (worldHeight3D < orthoHeight) {
-      this.targetZ = worldHeight3D / 2
+    // First call: instant snap to target (no smoothing)
+    if (!this.initialized) {
+      this.targetX = target3DX
+      this.targetZ = target3DZ
+      this.initialized = true
+    } else {
+      // Smooth interpolation for subsequent updates
+      this.targetX += (target3DX - this.targetX) * this.smoothing
+      this.targetZ += (target3DZ - this.targetZ) * this.smoothing
     }
 
     // Update camera target
@@ -84,11 +59,18 @@ export class Camera {
     this.arcCamera.setTarget(this.cachedTarget)
   }
 
+  // Instantly snap camera to position (useful for teleports)
+  snapTo(target: Position, heightY: number = 0) {
+    const scale = 1 / TILE_SIZE
+    this.targetX = target.x * scale
+    this.targetZ = target.y * scale
+    this.cachedTarget.set(this.targetX, heightY, this.targetZ)
+    this.arcCamera.setTarget(this.cachedTarget)
+  }
+
   resize(screenWidth: number, screenHeight: number) {
     this.screenWidth = screenWidth
     this.screenHeight = screenHeight
-    this.cachedOrthoWidth = (this.arcCamera.orthoRight ?? 0) - (this.arcCamera.orthoLeft ?? 0)
-    this.cachedOrthoHeight = (this.arcCamera.orthoTop ?? 0) - (this.arcCamera.orthoBottom ?? 0)
   }
 
   setWorldSize(worldWidth: number, worldHeight: number) {
@@ -100,9 +82,40 @@ export class Camera {
     this.pickableMeshes = new Set(meshes)
   }
 
-  nudgePan(dx: number, dz: number) {
-    this.panOffsetX += dx
-    this.panOffsetZ += dz
+  // Get current camera zoom (radius)
+  getZoom(): number {
+    return this.arcCamera.radius
+  }
+
+  // Set camera zoom
+  setZoom(radius: number) {
+    this.arcCamera.radius = Math.max(
+      this.arcCamera.lowerRadiusLimit ?? 8,
+      Math.min(radius, this.arcCamera.upperRadiusLimit ?? 40)
+    )
+  }
+
+  // Get current camera yaw (alpha) in radians
+  getYaw(): number {
+    return this.arcCamera.alpha
+  }
+
+  // Set camera yaw (alpha) in radians
+  setYaw(alpha: number) {
+    this.arcCamera.alpha = alpha
+  }
+
+  // Get current camera pitch (beta) in radians
+  getPitch(): number {
+    return this.arcCamera.beta
+  }
+
+  // Set camera pitch (beta) in radians
+  setPitch(beta: number) {
+    this.arcCamera.beta = Math.max(
+      this.arcCamera.lowerBetaLimit ?? 0.4,
+      Math.min(beta, this.arcCamera.upperBetaLimit ?? 1.2)
+    )
   }
 
   screenToWorld(screenX: number, screenY: number): Position | null {
@@ -112,29 +125,52 @@ export class Camera {
     const canvasX = screenX - rect.left
     const canvasY = screenY - rect.top
 
+    // Try picking against terrain meshes first
     const pick = this.scene.pick(
       canvasX,
       canvasY,
       (mesh) => {
         if (!mesh) return false
+        // Allow picking if no filter set
         if (!this.pickableMeshes) return true
+        // Check if mesh is directly in pickable set
         if (this.pickableMeshes.has(mesh)) return true
+        // Check if this is an instance of a pickable mesh
         const sourceMesh = (mesh as { sourceMesh?: AbstractMesh }).sourceMesh
-        return sourceMesh ? this.pickableMeshes.has(sourceMesh) : false
+        if (sourceMesh && this.pickableMeshes.has(sourceMesh)) return true
+        // Also check by metadata for terrain tiles
+        if (mesh.metadata?.terrainType === 'tile') return true
+        // Check source mesh metadata
+        if (sourceMesh?.metadata?.terrainType === 'tile') return true
+        return false
       },
       false,
       this.arcCamera
     )
 
-    if (!pick?.hit || !pick.pickedPoint) {
-      return null
+    if (pick?.hit && pick.pickedPoint) {
+      // Convert back to 2D game coordinates
+      return {
+        x: pick.pickedPoint.x * TILE_SIZE,
+        y: pick.pickedPoint.z * TILE_SIZE // z in 3D maps to y in 2D
+      }
     }
 
-    // Convert back to 2D game coordinates
-    return {
-      x: pick.pickedPoint.x * TILE_SIZE,
-      y: pick.pickedPoint.z * TILE_SIZE // z in 3D maps to y in 2D
+    // Fallback: raycast to ground plane (y=0) for editor usage
+    const ray = this.scene.createPickingRay(canvasX, canvasY, null, this.arcCamera)
+    if (ray && ray.direction.y !== 0) {
+      const t = -ray.origin.y / ray.direction.y
+      if (t > 0) {
+        const groundX = ray.origin.x + ray.direction.x * t
+        const groundZ = ray.origin.z + ray.direction.z * t
+        return {
+          x: groundX * TILE_SIZE,
+          y: groundZ * TILE_SIZE
+        }
+      }
     }
+
+    return null
   }
 
   worldToScreen(worldX: number, worldY: number): Position {

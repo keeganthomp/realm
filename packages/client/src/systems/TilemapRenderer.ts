@@ -69,7 +69,11 @@ export class TilemapRenderer {
 
   applyChunk(chunk: ChunkData) {
     const key = getChunkKey(chunk.chunkX, chunk.chunkY)
-    if (this.chunks.has(key)) return
+    if (this.chunks.has(key)) {
+      console.log(`[TilemapRenderer] Chunk ${key} already exists, skipping apply`)
+      return
+    }
+    console.log(`[TilemapRenderer] Applying chunk ${key}`)
 
     this.ensureBaseMeshes()
     const meshes: AbstractMesh[] = []
@@ -102,7 +106,11 @@ export class TilemapRenderer {
 
   removeChunk(chunkKey: ChunkKey) {
     const entry = this.chunks.get(chunkKey)
-    if (!entry) return
+    if (!entry) {
+      console.log(`[TilemapRenderer] removeChunk: ${chunkKey} not found`)
+      return
+    }
+    console.log(`[TilemapRenderer] removeChunk: removing ${chunkKey} with ${entry.meshes.length} meshes`)
     for (const mesh of entry.meshes) {
       mesh.dispose()
     }
@@ -205,6 +213,100 @@ export class TilemapRenderer {
     if (!chunk) return null
     const { localX, localY } = this.getLocalTile(tileX, tileY)
     return chunk.tiles[localY][localX]
+  }
+
+  // Editor methods for modifying tiles in real-time
+  setTileAt(tileX: number, tileY: number, tileType: TileType) {
+    const chunkX = Math.floor(tileX / CHUNK_SIZE)
+    const chunkY = Math.floor(tileY / CHUNK_SIZE)
+    const key = getChunkKey(chunkX, chunkY)
+    const entry = this.chunks.get(key)
+    if (!entry) return
+
+    const { localX, localY } = this.getLocalTile(tileX, tileY)
+    const oldType = entry.data.tiles[localY][localX]
+    if (oldType === tileType) return
+
+    // Update data
+    entry.data.tiles[localY][localX] = tileType
+
+    // Find and replace the mesh instance
+    const instanceIndex = localY * CHUNK_SIZE + localX
+    const oldInstance = entry.meshes[instanceIndex]
+    if (oldInstance) {
+      const newBaseMesh = this.baseMeshes.get(tileType)
+      if (newBaseMesh) {
+        const pos = oldInstance.position.clone()
+        oldInstance.dispose()
+        const newInstance = newBaseMesh.createInstance(`tile_${key}_${localX}_${localY}`)
+        newInstance.isPickable = true
+        newInstance.position = pos
+        entry.meshes[instanceIndex] = newInstance
+      }
+    }
+  }
+
+  setHeightAt(tileX: number, tileY: number, height: number) {
+    const chunkX = Math.floor(tileX / CHUNK_SIZE)
+    const chunkY = Math.floor(tileY / CHUNK_SIZE)
+    const key = getChunkKey(chunkX, chunkY)
+    const entry = this.chunks.get(key)
+    if (!entry) return
+
+    const { localX, localY } = this.getLocalTile(tileX, tileY)
+    const clampedHeight = Math.max(0, Math.min(5, height))
+
+    // Update data
+    entry.data.heights[localY][localX] = clampedHeight
+
+    // Update mesh position
+    const instanceIndex = localY * CHUNK_SIZE + localX
+    const instance = entry.meshes[instanceIndex]
+    if (instance) {
+      const originX = chunkX * CHUNK_SIZE
+      const originY = chunkY * CHUNK_SIZE
+      instance.position = new Vector3(
+        originX + localX + 0.5,
+        clampedHeight * LEVEL_H + TILE_THICK / 2,
+        originY + localY + 0.5
+      )
+    }
+  }
+
+  // Force rebuild a chunk's meshes (useful after multiple changes)
+  rebuildChunk(chunkX: number, chunkY: number) {
+    const key = getChunkKey(chunkX, chunkY)
+    const entry = this.chunks.get(key)
+    if (!entry) return
+
+    // Dispose old meshes
+    for (const mesh of entry.meshes) {
+      mesh.dispose()
+    }
+
+    // Rebuild
+    const meshes: AbstractMesh[] = []
+    const originX = chunkX * CHUNK_SIZE
+    const originY = chunkY * CHUNK_SIZE
+
+    for (let y = 0; y < CHUNK_SIZE; y++) {
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        const tileType = entry.data.tiles[y][x]
+        const height = entry.data.heights[y][x]
+        const mesh = this.baseMeshes.get(tileType)
+        if (!mesh) continue
+        const instance = mesh.createInstance(`tile_${key}_${x}_${y}`)
+        instance.isPickable = true
+        instance.position = new Vector3(
+          originX + x + 0.5,
+          height * LEVEL_H + TILE_THICK / 2,
+          originY + y + 0.5
+        )
+        meshes.push(instance)
+      }
+    }
+
+    entry.meshes = meshes
   }
 
   buildCollisionGrid() {

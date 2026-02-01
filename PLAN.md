@@ -25,6 +25,8 @@ Build a medieval fantasy 2D MMO with click-to-action gameplay, skill progression
 | Package Manager | pnpm | v9.12.2 |
 | Linting | ESLint | v9.39.2 |
 | Formatting | Prettier | v3.8.1 |
+| 3D Modeling | Blender | (latest) |
+| 3D Export | glTF/GLB | Native Babylon.js |
 
 ### Rendering: **Babylon.js**
 - Full 3D engine with perspective camera
@@ -45,10 +47,12 @@ Build a medieval fantasy 2D MMO with click-to-action gameplay, skill progression
 - Spritesheet atlases for performance
 - Aseprite for asset creation
 
-### World Generation: **Tiled + Procedural Hybrid**
-- Hand-crafted zones via Tiled Map Editor (exports JSON)
-- Procedural elements using Perlin noise (resource spawns, weather)
-- Chunk-based loading for large worlds
+### World Building: **In-Game Dev Editor (Jagex-Style)**
+- Hand-authored world using proprietary in-game editor (dev mode)
+- No procedural world generation - every tile is intentionally placed
+- Chunk-based JSON format for saving/loading regions
+- Hot-reload for rapid iteration
+- Procedural only for deterministic decoration (same seed = same clutter)
 
 ### Database: **PostgreSQL + Drizzle ORM**
 - PostgreSQL for persistent player data, items, skills
@@ -222,7 +226,7 @@ Level 99 cap (or 120 for endgame)
 
 - [x] Project scaffolding (monorepo: client/server/shared)
 - [x] PixiJS renderer setup with sprite loading
-- [x] Tilemap loader (procedural generation)
+- [x] Tilemap loader (placeholder terrain)
 - [x] Click-to-move pathfinding (A*)
 - [x] Basic player sprite with 4-directional animation
 - [x] Camera following player
@@ -314,35 +318,113 @@ Level 99 cap (or 120 for endgame)
 
 ---
 
-### Phase 6: Equipment & Crafting
+### Phase 6: World Editor (Jagex-Style Tooling)
+**Goal**: In-game dev editor for hand-authoring the world
+
+This is the highest-leverage work. Jagex didn't generate Varrock - they painted it with internal tools.
+
+#### 6.1 Core Editor Framework
+- [ ] Dev mode toggle (only in development builds)
+- [ ] Editor UI panel system (palette, brush, selection, properties)
+- [ ] Mouse/keyboard controls for editor (separate from gameplay)
+- [ ] Undo/redo system
+- [ ] Grid overlay and snap-to-grid
+
+#### 6.2 Terrain Editing
+- [ ] Tile brush (paint terrain types: grass, dirt, stone, water, sand)
+- [ ] Height brush (raise/lower terrain levels)
+- [ ] Eraser tool
+- [ ] Fill tool for large areas
+- [ ] Cliff faces auto-generated between height levels (existing)
+
+#### 6.3 Prop Placement
+- [ ] Prop palette (buildings, fences, rocks, trees, decorations)
+- [ ] Place/move/rotate/delete props
+- [ ] Snap to tile grid
+- [ ] Transform gizmos (position, rotation, scale)
+- [ ] Prop library browser with categories
+
+#### 6.4 Spawn & Interactable Placement
+- [ ] NPC spawn points (with type, level, aggro settings)
+- [ ] Resource nodes (trees, rocks, fishing spots)
+- [ ] Interactables (bank booth, furnace, anvil, cooking fire)
+- [ ] Shop NPCs with inventory configuration
+- [ ] Zone boundaries and transitions
+
+#### 6.5 Data Persistence
+- [ ] Chunk schema definition (JSON format)
+- [ ] Save chunk to file
+- [ ] Load chunk from file
+- [ ] Hot-reload chunks without restart
+- [ ] Schema versioning and migrations
+- [ ] Chunk validation on save
+
+#### 6.6 Performance & Streaming
+- [ ] Spatial hashing for efficient queries
+- [ ] Chunk streaming (load/unload based on player position)
+- [ ] LOD system for distant objects
+- [ ] Instanced rendering for repeated props
+
+**Deliverable**: Functional world editor for building game content
+
+---
+
+### Phase 7: First Town (Starter Zone)
+**Goal**: Hand-craft the tutorial/starting area using the editor
+
+Like Lumbridge - the first experience every player has. This proves out the editor pipeline.
+
+#### 7.1 Town Layout
+- [ ] Greybox town with placeholder meshes (grid-snapped)
+- [ ] Lock scale, road widths, building footprints
+- [ ] Central spawn point
+- [ ] Town square / plaza
+- [ ] Roads connecting key locations
+
+#### 7.2 Essential Buildings
+- [ ] Bank (with working bank booth)
+- [ ] General store (buy/sell basic items)
+- [ ] Furnace building (for future smithing)
+- [ ] Church/chapel (for future prayer)
+- [ ] Player spawn / respawn point
+
+#### 7.3 Skilling Areas (adjacent to town)
+- [ ] Forest patch (3-5 trees for woodcutting)
+- [ ] Fishing spot (river or pond)
+- [ ] Cooking fire / range
+- [ ] Mining rocks (copper, tin for future smithing)
+
+#### 7.4 Combat Areas (outside town)
+- [ ] Chicken coop / farm (level 1 chickens)
+- [ ] Cow field (level 2 cows)
+- [ ] Goblin camp (level 5 goblins, slightly further out)
+
+#### 7.5 NPCs & Signage
+- [ ] Tutorial NPC / guide
+- [ ] Shopkeepers
+- [ ] Signs pointing to locations
+- [ ] Wandering townsfolk (ambient)
+
+**Deliverable**: Complete starter town playable end-to-end
+
+---
+
+### Phase 8: Equipment & Crafting
 **Goal**: Gear progression
 
 - [ ] Equipment slots and UI
 - [ ] Stat bonuses from gear
-- [ ] Smithing skill (ore → bar → item)
 - [ ] Mining skill (rocks → ore)
+- [ ] Smithing skill (ore → bar → item)
 - [ ] Crafting skill basics
 - [ ] Equipment requirements (level locks)
+- [ ] Add ore rocks, furnace, anvil to starter town via editor
 
 **Deliverable**: Players can craft and equip gear
 
 ---
 
-### Phase 7: World Expansion
-**Goal**: Full explorable world
-
-- [ ] Multiple connected zones
-- [ ] Zone transitions
-- [ ] NPC shops
-- [ ] Quest framework (basic)
-- [ ] World bosses
-- [ ] Resource respawn timers
-
-**Deliverable**: Rich world to explore
-
----
-
-### Phase 8: Magic & Prayer
+### Phase 9: Magic & Prayer
 **Goal**: Complete combat triangle
 
 - [ ] Magic skill and spellbook
@@ -355,7 +437,21 @@ Level 99 cap (or 120 for endgame)
 
 ---
 
-### Phase 9: Social & Economy
+### Phase 10: World Expansion
+**Goal**: Build additional zones using the editor
+
+- [ ] Second town / city (commerce hub)
+- [ ] Zone transitions between areas
+- [ ] Quest framework (basic fetch/kill quests)
+- [ ] Wilderness / PvP zone
+- [ ] Dungeon (instanced or open-world)
+- [ ] World bosses
+
+**Deliverable**: Multiple connected zones to explore
+
+---
+
+### Phase 11: Social & Economy
 **Goal**: Player interaction systems
 
 - [ ] Trading between players
@@ -368,7 +464,7 @@ Level 99 cap (or 120 for endgame)
 
 ---
 
-### Phase 10: Polish & Scale
+### Phase 12: Polish & Scale
 **Goal**: Production readiness
 
 - [ ] Performance optimization
@@ -388,13 +484,18 @@ Level 99 cap (or 120 for endgame)
 ```
 realm/
 ├── packages/
-│   ├── client/                 # PixiJS + React game client
+│   ├── client/                 # Babylon.js + React game client
 │   │   ├── src/
 │   │   │   ├── main.tsx        # Entry point
 │   │   │   ├── App.tsx         # React app with UI overlays
 │   │   │   ├── Game.ts         # Main game controller
 │   │   │   ├── entities/       # Player, RemotePlayer, WorldObjectEntity
-│   │   │   ├── systems/        # Camera, Pathfinding, NetworkManager, TilemapRenderer
+│   │   │   ├── systems/        # Camera, Pathfinding, NetworkManager, TerrainRenderer
+│   │   │   ├── editor/         # Dev mode world editor (Phase 6)
+│   │   │   │   ├── Editor.ts           # Main editor controller
+│   │   │   │   ├── tools/              # TileBrush, HeightBrush, PropPlacer, SpawnPlacer
+│   │   │   │   ├── ui/                 # EditorPanel, Palette, PropertyInspector
+│   │   │   │   └── ChunkManager.ts     # Save/load/hot-reload chunks
 │   │   │   └── ui/             # React components (SkillsPanel, InventoryPanel, Chat, etc.)
 │   │   ├── index.html
 │   │   └── package.json
@@ -413,7 +514,19 @@ realm/
 │           ├── index.ts        # Core types, tile constants, coordinate utils
 │           ├── skills.ts       # 23 skill definitions, XP formulas
 │           ├── items.ts        # Item definitions (logs, fish, etc.)
-│           └── worldObjects.ts # World object definitions (trees, fishing spots)
+│           ├── worldObjects.ts # World object definitions (trees, fishing spots)
+│           └── chunks/         # Chunk schema, validation, migrations
+│
+├── world/                      # Hand-authored world data (checked in)
+│   ├── chunks/                 # Chunk JSON files
+│   │   ├── starter-town.json   # First town (Phase 7)
+│   │   └── ...
+│   └── props/                  # Prop definitions
+│
+├── assets/
+│   ├── models/                 # Blender source files (.blend)
+│   ├── exported/               # glTF/GLB exports for Babylon.js
+│   └── textures/               # Texture atlases
 │
 ├── .vscode/
 │   └── settings.json           # Format on save, ESLint config
@@ -465,7 +578,7 @@ pnpm typecheck        # TypeScript type checking
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Renderer | PixiJS v8 | Fastest 2D WebGL, tiny bundle |
+| Renderer | Babylon.js v8 | Full 3D engine, OSRS-style perspective camera |
 | UI Layer | React 19 | Modern, declarative UI overlays |
 | Multiplayer | Colyseus 0.17 | Best Node.js MMO framework |
 | Language | TypeScript 5.9 | Shared types client/server |
@@ -475,6 +588,8 @@ pnpm typecheck        # TypeScript type checking
 | Build | Vite 6 | Fast HMR, modern bundling |
 | Linting | ESLint 9 + Prettier | Consistent code style |
 | Package manager | pnpm | Fast, efficient, workspaces |
+| World building | In-game dev editor | Hand-authored like Jagex, not procedural |
+| 3D assets | Blender → glTF | Free, fast iteration, native Babylon.js format |
 
 ---
 
@@ -492,6 +607,8 @@ pnpm typecheck        # TypeScript type checking
 ## Current Status
 
 **Phases 1-5.5 Complete** - Full combat system and 3D terrain working.
+
+**Next: Phase 6 (World Editor)** - The current terrain is placeholder. We're building Jagex-style internal tooling to hand-author every tile, prop, and spawn. No procedural world generation.
 
 ### Combat System (Phase 5)
 - NPCs: Chicken (lvl 1), Cow (lvl 2), Goblin (lvl 5 aggressive)
@@ -522,14 +639,65 @@ pnpm typecheck        # TypeScript type checking
 
 ## Next Steps
 
-1. **Phase 6: Equipment System**
-   - Equipment slots (helm, body, legs, weapon, shield)
-   - Item stats (attack/strength/defence bonuses)
-   - Combat bonuses from equipped gear
-   - Equipment panel UI
-   - Bronze/Iron/Steel tier progression
+1. **Phase 6: World Editor** (Highest Priority)
+   - Build in-game dev editor for hand-authoring world content
+   - Tile brush for painting terrain types
+   - Height brush for elevation changes
+   - Prop placement system (buildings, trees, rocks, decorations)
+   - Spawn/interactable placement (NPCs, resources, bank booths)
+   - Save/load chunk JSON with hot-reload
+   - This is the single highest-leverage thing we can build next
 
-2. **NPC Improvements**
-   - NPC movement/chasing
-   - More NPC types
-   - Better spawn distribution
+2. **Phase 7: First Town**
+   - Use the editor to build starter zone (Lumbridge-equivalent)
+   - Bank, general store, key buildings
+   - Adjacent skilling areas (trees, fishing, cooking)
+   - Combat areas outside town (chickens, cows, goblins)
+
+---
+
+## Asset Pipeline (Jagex-Style)
+
+### World Building Workflow
+```
+1. Greybox → Rough layout with primitives in editor
+2. Lock dimensions → Finalize scale, roads, building footprints
+3. Replace greybox → Swap primitives with real props
+4. Polish → Lighting, fog, ambient details
+```
+
+### 3D Assets (Blender → Babylon.js)
+- Model in Blender (free, fast iteration)
+- Export as glTF/GLB (native Babylon.js format)
+- OSRS-style chunky low-poly aesthetic
+- Modular building kits: walls, corners, roofs, doors, windows
+- Snap to tile grid in Blender
+- One material style per biome (no mixing PBR with flat low-poly)
+
+### Textures & UI
+- Krita or Aseprite depending on style
+- Lock consistent palette before production
+- AI useful for concept/iteration, then clean up manually
+
+### AI Usage That Saves Time
+Use Claude/Codex to generate:
+- Drop tables, XP curves, item definitions from templates
+- Quest step graphs (tiny DSL) and reward tables
+- Town layout drafts as data ("place 12 houses along road, add plaza")
+- Deterministic procedural decoration (same seed = same clutter everywhere)
+
+Do NOT use AI to skip the pipeline. Use it to crank content through the pipeline.
+
+### Avoiding "Roblox Feel"
+Common problems:
+- Inconsistent scale
+- Shiny/default materials
+- No strong silhouettes/landmarks
+- No disciplined palette
+- Buildings not modular / not snapped / not readable
+
+Fix by:
+1. Greybox first, lock scale
+2. Make modular building kit in Blender
+3. Replace greyboxes with kit pieces (grid-snapped)
+4. One lighting setup + fog + low specular across whole scene
