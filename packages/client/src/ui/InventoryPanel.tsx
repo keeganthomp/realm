@@ -11,6 +11,42 @@ interface InventoryPanelProps {
 
 const MAX_SLOTS = 28
 
+// Shared panel styles - medieval/fantasy themed
+const panelStyle = {
+  background: 'linear-gradient(180deg, rgba(45, 42, 38, 0.97) 0%, rgba(32, 30, 27, 0.97) 100%)',
+  borderRadius: 8,
+  border: '2px solid rgba(90, 80, 65, 0.7)',
+  boxShadow: `
+    0 4px 24px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3)
+  `,
+  overflow: 'hidden' as const,
+  // Subtle parchment/stone texture
+  backgroundImage: `
+    radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.03) 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 80%, rgba(0, 0, 0, 0.1) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(45, 42, 38, 0.97) 0%, rgba(32, 30, 27, 0.97) 100%)
+  `
+}
+
+const headerStyle = {
+  padding: '12px 14px',
+  display: 'flex' as const,
+  justifyContent: 'space-between' as const,
+  alignItems: 'center' as const,
+  borderBottom: '1px solid rgba(212, 168, 75, 0.15)',
+  background: 'rgba(0, 0, 0, 0.2)'
+}
+
+const labelStyle = {
+  fontSize: 11,
+  fontWeight: 600 as const,
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.08em',
+  color: 'rgba(212, 168, 75, 0.7)'
+}
+
 export function InventoryPanel({
   items,
   selectedIndex,
@@ -18,7 +54,6 @@ export function InventoryPanel({
   onDropItem,
   onEatFood
 }: InventoryPanelProps) {
-  const [expanded, setExpanded] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(
     null
   )
@@ -81,56 +116,30 @@ export function InventoryPanel({
   return (
     <div
       onClick={handlePanelClick}
-      style={{
-        width: 200,
-        background: 'rgba(0, 0, 0, 0.7)',
-        borderRadius: 4,
-        overflow: 'hidden',
-        transition: 'all 0.2s ease',
-        position: 'relative'
-      }}
+      style={{ ...panelStyle, width: 210, position: 'relative' }}
     >
       {/* Header */}
-      <div
-        onClick={() => setExpanded(!expanded)}
-        style={{
-          padding: '10px 16px',
-          cursor: 'pointer',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottom: expanded ? '1px solid rgba(255,255,255,0.1)' : 'none'
-        }}
-      >
+      <div style={headerStyle}>
+        <span style={labelStyle}>Inventory</span>
         <span
           style={{
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            color: '#a3a3a3'
-          }}
-        >
-          Inventory
-        </span>
-        <span
-          style={{
-            color: usedSlots >= MAX_SLOTS ? '#ff6b6b' : '#b8860b',
+            color: usedSlots >= MAX_SLOTS ? '#f87171' : '#d4a84b',
             fontSize: 12,
-            fontWeight: 500
+            fontWeight: 600,
+            fontVariantNumeric: 'tabular-nums'
           }}
         >
           {usedSlots}/{MAX_SLOTS}
         </span>
       </div>
 
-      {expanded && (
-        <div style={{ padding: 8 }}>
-          {/* Inventory grid - 4 columns, 7 rows */}
+      <div style={{ padding: 10 }}>
+        {/* Inventory grid - 4 columns, 7 rows */}
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: 4
+              gap: 5
             }}
           >
             {slots.map((slot, index) => {
@@ -150,24 +159,29 @@ export function InventoryPanel({
                     aspectRatio: '1',
                     background: slot
                       ? isSelected
-                        ? 'rgba(184, 134, 11, 0.5)'
-                        : 'rgba(184, 134, 11, 0.2)'
-                      : 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: 4,
+                        ? 'rgba(212, 168, 75, 0.35)'
+                        : 'rgba(212, 168, 75, 0.12)'
+                      : 'rgba(0, 0, 0, 0.3)',
+                    borderRadius: 6,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     position: 'relative',
-                    fontSize: 18,
+                    fontSize: 20,
                     cursor: slot ? 'pointer' : 'default',
-                    border: isSelected ? '2px solid #b8860b' : '2px solid transparent',
-                    transition: 'all 0.15s ease'
+                    border: isSelected
+                      ? '2px solid #d4a84b'
+                      : '1px solid rgba(255, 255, 255, 0.06)',
+                    transition: 'all 0.12s ease',
+                    boxSizing: 'border-box'
                   }}
                 >
                   {slot && (
                     <>
-                      <span>{getItemIcon(slot.itemType)}</span>
+                      <span style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' }}>
+                        {getItemIcon(slot.itemType)}
+                      </span>
                       {slot.quantity > 1 && (
                         <span
                           style={{
@@ -175,8 +189,10 @@ export function InventoryPanel({
                             bottom: 2,
                             right: 4,
                             fontSize: 10,
-                            color: slot.quantity >= 10000 ? '#00ff00' : '#ffffff',
-                            fontWeight: 500
+                            fontWeight: 600,
+                            color: slot.quantity >= 10000 ? '#4ade80' : '#ffffff',
+                            textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                            fontVariantNumeric: 'tabular-nums'
                           }}
                         >
                           {formatQuantity(slot.quantity)}
@@ -193,20 +209,20 @@ export function InventoryPanel({
           {selectedIndex !== null && items[selectedIndex] && (
             <div
               style={{
-                marginTop: 8,
-                padding: '6px 8px',
-                background: 'rgba(184, 134, 11, 0.2)',
-                borderRadius: 4,
+                marginTop: 10,
+                padding: '8px 10px',
+                background: 'rgba(212, 168, 75, 0.15)',
+                borderRadius: 6,
                 fontSize: 11,
-                color: '#b8860b',
-                textAlign: 'center'
+                color: '#d4a84b',
+                textAlign: 'center',
+                border: '1px solid rgba(212, 168, 75, 0.2)'
               }}
             >
-              Click on fire to cook {ITEM_DEFINITIONS[items[selectedIndex].itemType as ItemType]?.name}
+              Click fire to cook {ITEM_DEFINITIONS[items[selectedIndex].itemType as ItemType]?.name}
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       {/* Context menu */}
       {contextMenu && (
@@ -215,11 +231,13 @@ export function InventoryPanel({
             position: 'fixed',
             left: contextMenu.x,
             top: contextMenu.y,
-            background: 'rgba(0, 0, 0, 0.9)',
-            borderRadius: 4,
+            background: 'linear-gradient(180deg, rgba(40, 40, 44, 0.98) 0%, rgba(28, 28, 32, 0.98) 100%)',
+            borderRadius: 6,
             border: '1px solid rgba(255, 255, 255, 0.1)',
             overflow: 'hidden',
-            zIndex: 1000
+            zIndex: 1000,
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+            minWidth: 100
           }}
         >
           {/* Eat option - only show for food items */}
@@ -233,16 +251,18 @@ export function InventoryPanel({
                 style={{
                   display: 'block',
                   width: '100%',
-                  padding: '8px 16px',
+                  padding: '10px 16px',
                   background: 'transparent',
                   border: 'none',
-                  color: '#22c55e',
+                  color: '#4ade80',
                   fontSize: 12,
+                  fontWeight: 500,
                   cursor: 'pointer',
-                  textAlign: 'left'
+                  textAlign: 'left',
+                  transition: 'background 0.1s ease'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)'
+                  e.currentTarget.style.background = 'rgba(74, 222, 128, 0.15)'
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'transparent'
@@ -259,16 +279,18 @@ export function InventoryPanel({
             style={{
               display: 'block',
               width: '100%',
-              padding: '8px 16px',
+              padding: '10px 16px',
               background: 'transparent',
               border: 'none',
-              color: '#ffffff',
+              color: 'rgba(255, 255, 255, 0.8)',
               fontSize: 12,
+              fontWeight: 500,
               cursor: 'pointer',
-              textAlign: 'left'
+              textAlign: 'left',
+              transition: 'background 0.1s ease'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(184, 134, 11, 0.3)'
+              e.currentTarget.style.background = 'rgba(212, 168, 75, 0.2)'
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'transparent'

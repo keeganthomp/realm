@@ -2,15 +2,14 @@ import {
   Scene,
   TransformNode,
   MeshBuilder,
-  StandardMaterial,
-  Color3,
-  AnimationGroup,
-  SceneLoader
+  AnimationGroup
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
-import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
+import { TextBlock } from '@babylonjs/gui'
 import { Direction, TILE_SIZE } from '@realm/shared'
 import type { Position } from '@realm/shared'
+import { SharedResources } from '../systems/SharedResources'
+import { AssetManager } from '../systems/AssetManager'
 
 const INTERPOLATION_SPEED = 0.15
 const MODEL_PATH = '/assets/models/'
@@ -37,7 +36,6 @@ export class RemotePlayer {
   private playerName: string
   private heightProvider: ((tileX: number, tileY: number) => number) | null = null
 
-  private guiTexture: AdvancedDynamicTexture | null = null
   private nameLabel: TextBlock | null = null
 
   constructor(startPosition: Position, name: string, scene: Scene) {
@@ -56,14 +54,12 @@ export class RemotePlayer {
 
   private async loadModel() {
     try {
-      const result = await SceneLoader.ImportMeshAsync('', MODEL_PATH, MODEL_FILE, this.scene)
+      // Use AssetManager for efficient model loading and sharing
+      const assetManager = AssetManager.get()
+      const result = await assetManager.instantiate(MODEL_PATH, MODEL_FILE, `remote_${this.playerName}`)
 
-      // Parent all meshes to our node
-      for (const mesh of result.meshes) {
-        if (!mesh.parent) {
-          mesh.parent = this.node
-        }
-      }
+      // Parent the instantiated model to our node
+      result.rootNode.parent = this.node
 
       // Find animations - look for common naming patterns
       for (const animGroup of result.animationGroups) {
@@ -113,32 +109,26 @@ export class RemotePlayer {
   }
 
   private createFallbackMeshes() {
-    const bodyMat = new StandardMaterial('remoteBodyMat_' + this.playerName, this.scene)
-    bodyMat.diffuseColor = new Color3(0.15, 0.15, 0.16)
-    bodyMat.specularColor = Color3.Black()
+    const res = SharedResources.get()
 
-    const skinMat = new StandardMaterial('remoteSkinMat_' + this.playerName, this.scene)
-    skinMat.diffuseColor = new Color3(0.96, 0.82, 0.66)
-    skinMat.specularColor = Color3.Black()
-
-    // Body
+    // Body - center at half height so bottom is at y=0 (ground level)
     const body = MeshBuilder.CreateCylinder(
       'remoteBody_' + this.playerName,
       { height: 0.8, diameter: 0.4, tessellation: 8 },
       this.scene
     )
-    body.material = bodyMat
-    body.position.y = 0.6
+    body.material = res.playerBodyMaterial
+    body.position.y = 0.4  // Half of 0.8 height, so bottom is at y=0
     body.parent = this.node
 
-    // Head
+    // Head - positioned above body
     const head = MeshBuilder.CreateSphere(
       'remoteHead_' + this.playerName,
       { diameter: 0.35, segments: 8 },
       this.scene
     )
-    head.material = skinMat
-    head.position.y = 1.2
+    head.material = res.playerSkinMaterial
+    head.position.y = 1.0  // Adjusted to maintain relative position to body
     head.parent = this.node
 
     this.node.scaling.setAll(1.5)
@@ -147,24 +137,17 @@ export class RemotePlayer {
 
   setHeightProvider(provider: (tileX: number, tileY: number) => number) {
     this.heightProvider = provider
+    // Invalidate cache to force height recalculation with new provider
+    this.cachedTileX = -1
+    this.cachedTileY = -1
     this.updateNodePosition()
   }
 
   private createNameLabel() {
-    this.guiTexture = AdvancedDynamicTexture.CreateFullscreenUI(
-      'remotePlayerUI_' + this.playerName,
-      true,
-      this.scene
-    )
-
-    this.nameLabel = new TextBlock('remoteName_' + this.playerName, this.playerName)
-    this.nameLabel.color = 'white'
+    const res = SharedResources.get()
+    this.nameLabel = res.createLabel('remote_' + this.playerName, this.playerName)
     this.nameLabel.fontSize = 14
-    this.nameLabel.fontFamily = 'Inter, sans-serif'
-    this.nameLabel.outlineWidth = 2
-    this.nameLabel.outlineColor = 'black'
-
-    this.guiTexture.addControl(this.nameLabel)
+    this.nameLabel.isVisible = true
     this.nameLabel.linkWithMesh(this.node)
     this.nameLabel.linkOffsetY = -72
   }
@@ -235,8 +218,6 @@ export class RemotePlayer {
 
   dispose() {
     this.node.dispose()
-    if (this.guiTexture) {
-      this.guiTexture.dispose()
-    }
+    SharedResources.get().removeControl(this.nameLabel)
   }
 }

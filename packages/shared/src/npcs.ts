@@ -6,7 +6,8 @@ export enum NpcType {
   CHICKEN = 'chicken',
   COW = 'cow',
   GOBLIN = 'goblin',
-  GIANT_RAT = 'giant_rat'
+  GIANT_RAT = 'giant_rat',
+  GUARD = 'guard'
 }
 
 export interface LootTableEntry {
@@ -97,6 +98,22 @@ export const NPC_DEFINITIONS: Record<NpcType, NpcDefinition> = {
     attackSpeed: 4,
     aggroRange: 0,
     respawnTime: 40000,
+    drops: [
+      { item: ItemType.BONES, minQuantity: 1, maxQuantity: 1, weight: 100 }
+    ]
+  },
+  [NpcType.GUARD]: {
+    type: NpcType.GUARD,
+    name: 'Guard',
+    combatLevel: 21,
+    hitpoints: 22,
+    maxHit: 4,
+    attackLevel: 19,
+    strengthLevel: 18,
+    defenceLevel: 18,
+    attackSpeed: 4,
+    aggroRange: 0, // Passive - town guards don't attack players
+    respawnTime: 60000,
     drops: [
       { item: ItemType.BONES, minQuantity: 1, maxQuantity: 1, weight: 100 }
     ]

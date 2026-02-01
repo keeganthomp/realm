@@ -1,4 +1,14 @@
 import type { TilePosition } from '@realm/shared'
+import { BinaryHeap, type HeapNode } from './BinaryHeap'
+
+interface PathNode extends HeapNode {
+  x: number
+  y: number
+  g: number
+  f: number
+  parent: number | null
+  index: number
+}
 
 export class Pathfinding {
   private grid: number[][]
@@ -28,13 +38,16 @@ export class Pathfinding {
       return null
     }
 
-    const nodes: { x: number; y: number; g: number; f: number; parent: number | null }[] = []
-    const open: number[] = []
-    const closed = new Set<string>()
-    const indexByPos = new Map<string, number>()
+    const nodes: PathNode[] = []
+    const openHeap = new BinaryHeap<PathNode>()
+    const closed = new Set<number>() // Use numeric key instead of string for less GC
+    const indexByPos = new Map<number, number>() // Use numeric key
 
-    const startKey = `${localStartX},${localStartY}`
-    const endKey = `${localEndX},${localEndY}`
+    // Convert 2D coords to single number key (faster than string concatenation)
+    const posKey = (x: number, y: number) => x + y * 10000
+
+    const startKey = posKey(localStartX, localStartY)
+    const endKey = posKey(localEndX, localEndY)
 
     const h = (x: number, y: number) => {
       const dx = Math.abs(x - localEndX)
@@ -42,14 +55,16 @@ export class Pathfinding {
       return Math.max(dx, dy)
     }
 
-    nodes.push({
+    const startNode: PathNode = {
       x: localStartX,
       y: localStartY,
       g: 0,
       f: h(localStartX, localStartY),
-      parent: null
-    })
-    open.push(0)
+      parent: null,
+      index: 0
+    }
+    nodes.push(startNode)
+    openHeap.push(startNode)
     indexByPos.set(startKey, 0)
 
     const directions = [
@@ -63,26 +78,18 @@ export class Pathfinding {
       { dx: -1, dy: 1, cost: 1.4 }
     ]
 
-    while (open.length > 0) {
-      // Find lowest f
-      let bestOpenIdx = 0
-      for (let i = 1; i < open.length; i++) {
-        if (nodes[open[i]].f < nodes[open[bestOpenIdx]].f) {
-          bestOpenIdx = i
-        }
-      }
-
-      const currentIndex = open.splice(bestOpenIdx, 1)[0]
-      const current = nodes[currentIndex]
-      const currentKey = `${current.x},${current.y}`
+    while (openHeap.length > 0) {
+      // O(log n) pop instead of O(n) linear search
+      const current = openHeap.pop()!
+      const currentKey = posKey(current.x, current.y)
       indexByPos.delete(currentKey)
       closed.add(currentKey)
 
       if (currentKey === endKey) {
         const path: TilePosition[] = []
-        let nodeIndex: number | null = currentIndex
+        let nodeIndex: number | null = current.index
         while (nodeIndex !== null) {
-          const node: (typeof nodes)[number] = nodes[nodeIndex]
+          const node: PathNode = nodes[nodeIndex]
           if (node.parent !== null) {
             path.push({ tileX: node.x + this.offsetX, tileY: node.y + this.offsetY })
           }
@@ -95,7 +102,7 @@ export class Pathfinding {
       for (const dir of directions) {
         const nx = current.x + dir.dx
         const ny = current.y + dir.dy
-        const nKey = `${nx},${ny}`
+        const nKey = posKey(nx, ny)
 
         if (closed.has(nKey)) continue
         if (!this.isWalkable(nx, ny)) continue
@@ -103,14 +110,16 @@ export class Pathfinding {
 
         // Diagonal corner cutting check
         if (dir.dx !== 0 && dir.dy !== 0) {
-          const adj1 = { x: current.x + dir.dx, y: current.y }
-          const adj2 = { x: current.x, y: current.y + dir.dy }
-          if (!this.isWalkable(adj1.x, adj1.y) || !this.isWalkable(adj2.x, adj2.y)) {
+          const adj1x = current.x + dir.dx
+          const adj1y = current.y
+          const adj2x = current.x
+          const adj2y = current.y + dir.dy
+          if (!this.isWalkable(adj1x, adj1y) || !this.isWalkable(adj2x, adj2y)) {
             continue
           }
           if (
-            !this.isHeightAllowed(current.x, current.y, adj1.x, adj1.y) ||
-            !this.isHeightAllowed(current.x, current.y, adj2.x, adj2.y)
+            !this.isHeightAllowed(current.x, current.y, adj1x, adj1y) ||
+            !this.isHeightAllowed(current.x, current.y, adj2x, adj2y)
           ) {
             continue
           }
@@ -119,15 +128,26 @@ export class Pathfinding {
         const g = current.g + dir.cost
         const existingIndex = indexByPos.get(nKey)
         if (existingIndex !== undefined) {
-          if (g < nodes[existingIndex].g) {
-            nodes[existingIndex].g = g
-            nodes[existingIndex].f = g + h(nx, ny)
-            nodes[existingIndex].parent = currentIndex
+          const existingNode = nodes[existingIndex]
+          if (g < existingNode.g) {
+            existingNode.g = g
+            existingNode.f = g + h(nx, ny)
+            existingNode.parent = current.index
+            // Update position in heap
+            openHeap.decreaseKey(existingNode)
           }
         } else {
           const nodeIndex = nodes.length
-          nodes.push({ x: nx, y: ny, g, f: g + h(nx, ny), parent: currentIndex })
-          open.push(nodeIndex)
+          const newNode: PathNode = {
+            x: nx,
+            y: ny,
+            g,
+            f: g + h(nx, ny),
+            parent: current.index,
+            index: nodeIndex
+          }
+          nodes.push(newNode)
+          openHeap.push(newNode) // O(log n) push
           indexByPos.set(nKey, nodeIndex)
         }
       }

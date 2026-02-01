@@ -58,6 +58,7 @@ export class TilemapRenderer {
       const mat = new StandardMaterial(`tileMat_${tileType}_base`, this.scene)
       mat.diffuseColor = new Color3(color.r, color.g, color.b)
       mat.specularColor = Color3.Black()
+      mat.freeze() // Freeze material for performance
       mesh.material = mat
       mesh.isPickable = true
       mesh.isVisible = false
@@ -122,6 +123,7 @@ export class TilemapRenderer {
     const cliffMat = new StandardMaterial(`cliffMat_${chunk.chunkX}_${chunk.chunkY}`, this.scene)
     cliffMat.diffuseColor = new Color3(0.35, 0.35, 0.35)
     cliffMat.specularColor = Color3.Black()
+    cliffMat.freeze() // Freeze material for performance
 
     const faceMesh = MeshBuilder.CreateBox(
       `cliffFace_${chunk.chunkX}_${chunk.chunkY}`,

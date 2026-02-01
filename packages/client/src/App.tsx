@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { TileType, WorldObjectType } from '@realm/shared'
 import { Game } from './Game'
 import { NetworkManager } from './systems/NetworkManager'
 import { ChatPanel } from './ui/ChatPanel'
@@ -12,8 +11,7 @@ import { ActionProgress } from './ui/ActionProgress'
 import { Notifications, useNotifications } from './ui/Notifications'
 import { LoadingScreen } from './ui/LoadingScreen'
 import { HealthBar } from './ui/HealthBar'
-import { EditorOverlay } from './ui/editor'
-import type { EditorStateData, EditorTool } from './editor/EditorState'
+import { Sidebar, PanelType } from './ui/Sidebar'
 
 export function App() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -43,8 +41,8 @@ export function App() {
   const [maxHp, setMaxHp] = useState(10)
   const [inCombat, setInCombat] = useState(false)
 
-  // Editor state
-  const [editorState, setEditorState] = useState<EditorStateData | null>(null)
+  // Sidebar panel state - null means no panel open
+  const [activePanel, setActivePanel] = useState<PanelType>(null)
 
   // Store selected item index in ref for use in callbacks
   const selectedItemIndexRef = useRef<number | null>(null)
@@ -85,14 +83,6 @@ export function App() {
         throw error
       }
       gameRef.current = game
-
-      // Subscribe to editor state
-      const editor = game.getEditor()
-      if (editor) {
-        editor.state.subscribe((state) => {
-          setEditorState(state)
-        })
-      }
 
       // Initialize network
       setLoadingStatus('Connecting to server...')
@@ -276,55 +266,6 @@ export function App() {
     networkRef.current?.eatFood(index)
   }, [])
 
-  // Editor handlers
-  const handleEditorSelectTool = useCallback((tool: EditorTool) => {
-    gameRef.current?.getEditor()?.state.setTool(tool)
-  }, [])
-
-  const handleEditorSelectTile = useCallback((type: TileType) => {
-    gameRef.current?.getEditor()?.state.setSelectedTileType(type)
-  }, [])
-
-  const handleEditorSelectProp = useCallback((type: WorldObjectType) => {
-    gameRef.current?.getEditor()?.state.setSelectedPropType(type)
-  }, [])
-
-  const handleEditorBrushSizeChange = useCallback((size: number) => {
-    gameRef.current?.getEditor()?.state.setBrushSize(size)
-  }, [])
-
-  const handleEditorHeightDeltaChange = useCallback((delta: number) => {
-    gameRef.current?.getEditor()?.state.setHeightDelta(delta)
-  }, [])
-
-  const handleEditorUndo = useCallback(() => {
-    gameRef.current?.getEditor()?.history.undo()
-  }, [])
-
-  const handleEditorRedo = useCallback(() => {
-    gameRef.current?.getEditor()?.history.redo()
-  }, [])
-
-  const handleEditorSave = useCallback(() => {
-    const success = gameRef.current?.getEditor()?.save()
-    if (success) {
-      setMessages((prev) => [...prev.slice(-50), { sender: 'System', text: 'Chunk saved to localStorage' }])
-    }
-  }, [])
-
-  const handleEditorDownload = useCallback(() => {
-    gameRef.current?.getEditor()?.download()
-  }, [])
-
-  const handleEditorImportFile = useCallback(async (file: File) => {
-    const success = await gameRef.current?.getEditor()?.importFile(file)
-    if (success) {
-      setMessages((prev) => [...prev.slice(-50), { sender: 'System', text: `Loaded chunk from ${file.name}` }])
-    } else {
-      setMessages((prev) => [...prev.slice(-50), { sender: 'System', text: 'Failed to load chunk file' }])
-    }
-  }, [])
-
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       {/* Loading Screen */}
@@ -352,30 +293,29 @@ export function App() {
           {/* Top left - Player list */}
           <PlayerList players={players} />
 
-          {/* Top right - Skills panel */}
+          {/* Right side - Sidebar with Skills and Inventory panels */}
+          <Sidebar activePanel={activePanel} onPanelChange={setActivePanel}>
+            {activePanel === 'skills' && <SkillsPanel skills={skills} />}
+            {activePanel === 'inventory' && (
+              <InventoryPanel
+                items={inventory}
+                selectedIndex={selectedItemIndex}
+                onSelectItem={handleSelectItem}
+                onDropItem={handleDropItem}
+                onEatFood={handleEatFood}
+              />
+            )}
+          </Sidebar>
+
+          {/* Connection indicator - bottom right */}
           <div
             style={{
               position: 'absolute',
-              top: 16,
+              bottom: 16,
               right: 16,
-              pointerEvents: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8
+              pointerEvents: 'auto'
             }}
           >
-            <SkillsPanel skills={skills} />
-            <InventoryPanel
-              items={inventory}
-              selectedIndex={selectedItemIndex}
-              onSelectItem={handleSelectItem}
-              onDropItem={handleDropItem}
-              onEatFood={handleEatFood}
-            />
-          </div>
-
-          {/* Bottom right - Connection indicator */}
-          <div style={{ position: 'absolute', bottom: 16, right: 16, pointerEvents: 'auto' }}>
             <ConnectionStatus connected={connected} />
           </div>
 
@@ -407,23 +347,6 @@ export function App() {
                 onClose={handleCloseBank}
               />
             </div>
-          )}
-
-          {/* Editor Overlay */}
-          {editorState && (
-            <EditorOverlay
-              state={editorState}
-              onSelectTool={handleEditorSelectTool}
-              onSelectTile={handleEditorSelectTile}
-              onSelectProp={handleEditorSelectProp}
-              onBrushSizeChange={handleEditorBrushSizeChange}
-              onHeightDeltaChange={handleEditorHeightDeltaChange}
-              onUndo={handleEditorUndo}
-              onRedo={handleEditorRedo}
-              onSave={handleEditorSave}
-              onDownload={handleEditorDownload}
-              onImportFile={handleEditorImportFile}
-            />
           )}
         </div>
       )}

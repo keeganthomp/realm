@@ -13,7 +13,7 @@ import {
   Color3,
   StandardMaterial
 } from '@babylonjs/core'
-import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
+import { TextBlock } from '@babylonjs/gui'
 import { Player } from './entities/Player'
 import { RemotePlayer } from './entities/RemotePlayer'
 import { WorldObjectEntity } from './entities/WorldObjectEntity'
@@ -21,9 +21,10 @@ import { NpcEntity } from './entities/NpcEntity'
 import { TilemapRenderer, LEVEL_H, TILE_THICK } from './systems/TilemapRenderer'
 import { Camera } from './systems/Camera'
 import { Pathfinding } from './systems/Pathfinding'
-import { worldToTile, tileToWorld, WorldObjectType, NpcType, TILE_SIZE, TileType } from '@realm/shared'
+import { SharedResources } from './systems/SharedResources'
+import { AssetManager } from './systems/AssetManager'
+import { worldToTile, tileToWorld, WorldObjectType, NpcType, TILE_SIZE } from '@realm/shared'
 import type { Position, Direction, ChunkData } from '@realm/shared'
-import { Editor } from './editor/Editor'
 
 export class Game {
   private engine!: Engine
@@ -36,12 +37,12 @@ export class Game {
   private tilemap!: TilemapRenderer
   private camera!: Camera
   private pathfinding!: Pathfinding
+  private sharedResources!: SharedResources
   private lastTime: number = 0
   private rotationStep: number = Math.PI / 2
   private hoveredObjectId: string | null = null
   private hoveredNpcId: string | null = null
   private hoverIndicator!: Mesh
-  private hoverUi!: AdvancedDynamicTexture
   private hoverLabel!: TextBlock
   private lastActionTarget: Position | null = null
   private cameraKeys: Set<string> = new Set()
@@ -51,13 +52,7 @@ export class Game {
   private lastCameraX: number = -1
   private lastCameraY: number = -1
 
-  // Editor
-  private editor: Editor | null = null
-  private pointerDown = false
-  private lastPointerButton = 0
-
   // Callbacks
-  public onEditorStateChange?: (active: boolean) => void
   public onLocalPlayerMove?: (position: Position, path: Position[]) => void
   public onWorldObjectClick?: (objectId: string, objectPosition: Position) => void
   public onNpcClick?: (npcId: string, npcPosition: Position) => void
@@ -70,10 +65,28 @@ export class Game {
     canvas.style.display = 'block'
     container.appendChild(canvas)
 
-    // Initialize Babylon.js engine
-    this.engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true })
+    // Initialize Babylon.js engine with performance options
+    this.engine = new Engine(canvas, true, {
+      preserveDrawingBuffer: false, // Better performance
+      stencil: false, // Disable if not using stencil operations
+      antialias: true,
+      powerPreference: 'high-performance',
+      failIfMajorPerformanceCaveat: false
+    })
     this.scene = new Scene(this.engine)
     this.scene.clearColor = new Color4(0.1, 0.1, 0.18, 1) // #1a1a2e
+
+    // Performance optimizations
+    this.scene.skipPointerMovePicking = false // Need this for hover
+    this.scene.autoClear = true
+    this.scene.autoClearDepthAndStencil = true
+    this.scene.blockMaterialDirtyMechanism = true // Prevent unnecessary material updates
+
+    // Initialize shared resources (must be before any entity creation)
+    this.sharedResources = SharedResources.init(this.scene)
+
+    // Initialize asset manager for efficient model loading
+    AssetManager.init(this.scene)
 
     // Setup OSRS-style camera
     // Start at player spawn position (tile 10,10)
@@ -132,70 +145,11 @@ export class Game {
 
     await this.initSystems()
     await this.initPlayer()
-    this.initEditor()
     this.setupInput()
 
     window.addEventListener('resize', this.handleResize)
     window.addEventListener('keydown', this.handleKeyDown)
     window.addEventListener('keyup', this.handleKeyUp)
-  }
-
-  private initEditor() {
-    this.editor = new Editor(this.scene, {
-      onTileChange: (worldX, worldY, tileType) => {
-        this.tilemap.setTileAt(worldX, worldY, tileType)
-      },
-      onHeightChange: (worldX, worldY, height) => {
-        this.tilemap.setHeightAt(worldX, worldY, height)
-      },
-      onObjectAdd: (id, objectType, worldX, worldY) => {
-        this.addWorldObject(id, objectType, worldX, worldY)
-      },
-      onObjectRemove: (id) => {
-        this.removeWorldObject(id)
-      },
-      onChunkApply: (chunk) => {
-        this.applyEditorChunk(chunk)
-      },
-      getHeight: (tileX, tileY) => this.tilemap.getHeight(tileX, tileY),
-      getTile: (tileX, tileY) => this.tilemap.getTileAt(tileX, tileY),
-      getPlayerTile: () => worldToTile(this.player.position)
-    })
-
-    // Subscribe to editor state changes
-    this.editor.state.subscribe((state) => {
-      this.onEditorStateChange?.(state.active)
-    })
-  }
-
-  private applyEditorChunk(chunk: ChunkData) {
-    // Remove existing chunk if present
-    const key = `${chunk.chunkX},${chunk.chunkY}`
-    console.log(`[Game] applyEditorChunk: key=${key}`)
-    const existingIds = this.chunkObjects.get(key)
-    if (existingIds) {
-      console.log(`[Game] Removing ${existingIds.length} existing objects`)
-      for (const id of existingIds) {
-        this.removeWorldObject(id)
-      }
-    }
-    this.tilemap.removeChunk(key)
-    console.log(`[Game] Removed chunk, now applying new chunk`)
-
-    // Apply new chunk
-    this.tilemap.applyChunk(chunk)
-    console.log(`[Game] Chunk applied`)
-    const ids: string[] = []
-    for (const obj of chunk.objects) {
-      this.addWorldObject(obj.id, obj.objectType, obj.x, obj.y)
-      if (obj.depleted) {
-        this.updateWorldObject(obj.id, true)
-      }
-      ids.push(obj.id)
-    }
-    this.chunkObjects.set(key, ids)
-    this.refreshNavigationGrid()
-    this.camera.setPickableMeshes(this.tilemap.getTerrainMeshes())
   }
 
   private async initSystems() {
@@ -237,22 +191,6 @@ export class Game {
         if (e.button === 2) {
           e.preventDefault()
         }
-
-        this.pointerDown = true
-        this.lastPointerButton = e.button
-
-        // Route to editor if active
-        if (this.editor?.isActive()) {
-          const worldPos = this.camera.screenToWorld(e.clientX, e.clientY)
-          if (worldPos) {
-            const tile = worldToTile(worldPos)
-            this.editor.handlePointerDown(tile.tileX, tile.tileY, e.button, e.shiftKey, e.ctrlKey)
-          } else {
-            console.warn('[Editor] screenToWorld returned null - no terrain hit')
-          }
-          return
-        }
-
         this.processClick(e)
       }
     })
@@ -260,40 +198,7 @@ export class Game {
     this.scene.onPointerObservable.add((pointerInfo) => {
       if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
         const e = pointerInfo.event as PointerEvent
-
-        // Route to editor if active
-        if (this.editor?.isActive()) {
-          const worldPos = this.camera.screenToWorld(e.clientX, e.clientY)
-          if (worldPos) {
-            const tile = worldToTile(worldPos)
-            this.editor.handlePointerMove(
-              tile.tileX,
-              tile.tileY,
-              this.pointerDown ? this.lastPointerButton : -1,
-              e.shiftKey,
-              e.ctrlKey
-            )
-          }
-          return
-        }
-
         this.processHover(e)
-      }
-    })
-
-    this.scene.onPointerObservable.add((pointerInfo) => {
-      if (pointerInfo.type === PointerEventTypes.POINTERUP) {
-        const e = pointerInfo.event as PointerEvent
-        this.pointerDown = false
-
-        // Route to editor if active
-        if (this.editor?.isActive()) {
-          const worldPos = this.camera.screenToWorld(e.clientX, e.clientY)
-          if (worldPos) {
-            const tile = worldToTile(worldPos)
-            this.editor.handlePointerUp(tile.tileX, tile.tileY, e.button, e.shiftKey, e.ctrlKey)
-          }
-        }
       }
     })
 
@@ -462,13 +367,15 @@ export class Game {
   }
 
   private findWorldObjectAt(pos: Position): WorldObjectEntity | null {
-    const clickRadius = TILE_SIZE / 2 + 8
+    // Use squared distance to avoid expensive sqrt calls
+    const clickRadiusSq = (TILE_SIZE / 2 + 8) ** 2
     for (const obj of this.worldObjects.values()) {
+      // Access x/y directly from entity instead of creating new object via getPosition()
       const objPos = obj.getPosition()
       const dx = pos.x - objPos.x
       const dy = pos.y - objPos.y
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < clickRadius) {
+      const distSq = dx * dx + dy * dy
+      if (distSq < clickRadiusSq) {
         return obj
       }
     }
@@ -515,13 +422,14 @@ export class Game {
   }
 
   private findNpcAt(pos: Position): NpcEntity | null {
-    const clickRadius = TILE_SIZE / 2 + 8
+    // Use squared distance to avoid expensive sqrt calls
+    const clickRadiusSq = (TILE_SIZE / 2 + 8) ** 2
     for (const npc of this.npcs.values()) {
       const npcPos = npc.getPosition()
       const dx = pos.x - npcPos.x
       const dy = pos.y - npcPos.y
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < clickRadius) {
+      const distSq = dx * dx + dy * dy
+      if (distSq < clickRadiusSq) {
         return npc
       }
     }
@@ -544,7 +452,7 @@ export class Game {
     ]
 
     let best: { tileX: number; tileY: number } | null = null
-    let bestScore = Number.POSITIVE_INFINITY
+    let bestScoreSq = Number.POSITIVE_INFINITY // Use squared distance
 
     for (const dir of directions) {
       const checkX = objectTile.tileX + dir.dx
@@ -558,9 +466,10 @@ export class Game {
       ) {
         const dx = checkX - fromTile.tileX
         const dy = checkY - fromTile.tileY
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        if (dist < bestScore) {
-          bestScore = dist
+        // Use squared distance to avoid sqrt - same ordering, faster comparison
+        const distSq = dx * dx + dy * dy
+        if (distSq < bestScoreSq) {
+          bestScoreSq = distSq
           best = { tileX: checkX, tileY: checkY }
         }
       }
@@ -575,22 +484,6 @@ export class Game {
   }
 
   private handleKeyDown = (e: KeyboardEvent) => {
-    // Backtick toggles editor mode
-    if (e.key === '`') {
-      this.editor?.toggle()
-      e.preventDefault()
-      return
-    }
-
-    // Route to editor if active
-    if (this.editor?.isActive()) {
-      const handled = this.editor.handleKeyDown(e.key, e.ctrlKey, e.shiftKey)
-      if (handled) {
-        e.preventDefault()
-        return
-      }
-    }
-
     // Q/E for quick 45° rotation snaps (like OSRS compass clicks)
     if (e.key.toLowerCase() === 'q') {
       this.arcCamera.alpha -= this.rotationStep
@@ -897,41 +790,30 @@ export class Game {
     window.removeEventListener('keydown', this.handleKeyDown)
     window.removeEventListener('keyup', this.handleKeyUp)
     this.hoverIndicator?.dispose()
-    this.hoverUi?.dispose()
-    this.editor?.destroy()
+    this.sharedResources?.dispose()
     this.engine.dispose()
-  }
-
-  // Editor access
-  getEditor(): Editor | null {
-    return this.editor
   }
 
   private createHoverIndicator() {
     this.hoverIndicator = MeshBuilder.CreateDisc(
       'hoverIndicator',
-      { radius: 0.45, tessellation: 24 },
+      { radius: 0.45, tessellation: 16 }, // Reduced tessellation for performance
       this.scene
     )
-    const mat = new StandardMaterial('hoverIndicatorMat', this.scene)
-    mat.diffuseColor = new Color3(1, 1, 1)
-    mat.emissiveColor = new Color3(0.2, 0.6, 1)
-    mat.specularColor = Color3.Black()
-    mat.alpha = 0.35
+    // Use shared material for hover indicator
+    const mat = this.sharedResources.getMaterial(
+      'hoverIndicator',
+      new Color3(1, 1, 1),
+      { emissive: new Color3(0.2, 0.6, 1), alpha: 0.35 }
+    )
     this.hoverIndicator.material = mat
     this.hoverIndicator.rotation.x = Math.PI / 2
     this.hoverIndicator.isPickable = false
     this.hoverIndicator.isVisible = false
 
-    this.hoverUi = AdvancedDynamicTexture.CreateFullscreenUI('hoverUI', true, this.scene)
-    this.hoverLabel = new TextBlock('hoverLabel', 'Walk here')
-    this.hoverLabel.color = 'white'
+    // Use shared GUI for hover label
+    this.hoverLabel = this.sharedResources.createLabel('hover', 'Walk here')
     this.hoverLabel.fontSize = 12
-    this.hoverLabel.fontFamily = 'Inter, sans-serif'
-    this.hoverLabel.outlineWidth = 2
-    this.hoverLabel.outlineColor = 'black'
-    this.hoverLabel.isVisible = false
     this.hoverLabel.linkOffsetY = -40
-    this.hoverUi.addControl(this.hoverLabel)
   }
 }

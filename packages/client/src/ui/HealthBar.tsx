@@ -7,11 +7,14 @@ export function HealthBar({ currentHp, maxHp }: HealthBarProps) {
   const hpPercent = maxHp > 0 ? (currentHp / maxHp) * 100 : 0
 
   // Determine color based on HP percentage
-  let barColor = '#22c55e' // Green
+  let barColor = '#4ade80' // Green
+  let glowColor = 'rgba(74, 222, 128, 0.4)'
   if (hpPercent <= 25) {
-    barColor = '#ef4444' // Red
+    barColor = '#f87171' // Red
+    glowColor = 'rgba(248, 113, 113, 0.4)'
   } else if (hpPercent <= 50) {
-    barColor = '#eab308' // Yellow
+    barColor = '#fbbf24' // Amber
+    glowColor = 'rgba(251, 191, 36, 0.4)'
   }
 
   return (
@@ -24,16 +27,17 @@ export function HealthBar({ currentHp, maxHp }: HealthBarProps) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 4
+        gap: 6
       }}
     >
       {/* Label */}
       <span
         style={{
           fontSize: 10,
+          fontWeight: 600,
           textTransform: 'uppercase',
-          letterSpacing: '0.1em',
-          color: '#a3a3a3'
+          letterSpacing: '0.08em',
+          color: 'rgba(255, 255, 255, 0.5)'
         }}
       >
         Hitpoints
@@ -42,26 +46,29 @@ export function HealthBar({ currentHp, maxHp }: HealthBarProps) {
       {/* Bar container */}
       <div
         style={{
-          width: 120,
-          height: 16,
-          background: 'rgba(0, 0, 0, 0.7)',
-          borderRadius: 4,
+          width: 140,
+          height: 18,
+          background: 'linear-gradient(180deg, rgba(32, 32, 36, 0.95) 0%, rgba(24, 24, 28, 0.95) 100%)',
+          borderRadius: 6,
           overflow: 'hidden',
           position: 'relative',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.3)'
         }}
       >
         {/* Fill */}
         <div
           style={{
             position: 'absolute',
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: `${hpPercent}%`,
-            background: barColor,
-            transition: 'width 0.2s ease, background 0.2s ease',
-            borderRadius: 3
+            left: 2,
+            top: 2,
+            bottom: 2,
+            width: `calc(${hpPercent}% - 4px)`,
+            minWidth: hpPercent > 0 ? 4 : 0,
+            background: `linear-gradient(180deg, ${barColor} 0%, ${barColor}cc 100%)`,
+            borderRadius: 4,
+            transition: 'width 0.25s ease, background 0.25s ease',
+            boxShadow: `0 0 12px ${glowColor}`
           }}
         />
 
@@ -74,9 +81,10 @@ export function HealthBar({ currentHp, maxHp }: HealthBarProps) {
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 11,
-            fontWeight: 500,
+            fontWeight: 600,
             color: '#ffffff',
-            textShadow: '0 1px 2px rgba(0,0,0,0.8)'
+            textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+            fontVariantNumeric: 'tabular-nums'
           }}
         >
           {currentHp} / {maxHp}

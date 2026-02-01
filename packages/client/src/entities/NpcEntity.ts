@@ -2,13 +2,11 @@ import {
   Scene,
   TransformNode,
   MeshBuilder,
-  StandardMaterial,
-  Color3,
-  Vector3,
   Mesh
 } from '@babylonjs/core'
-import { AdvancedDynamicTexture, TextBlock, Rectangle, Control } from '@babylonjs/gui'
+import { TextBlock, Rectangle } from '@babylonjs/gui'
 import { NpcType, NPC_DEFINITIONS, TILE_SIZE } from '@realm/shared'
+import { SharedResources } from '../systems/SharedResources'
 
 export class NpcEntity {
   public id: string
@@ -30,7 +28,6 @@ export class NpcEntity {
   private cachedTileY: number = -1
   private cachedHeightY: number = 0
 
-  private guiTexture: AdvancedDynamicTexture | null = null
   private nameLabel: TextBlock | null = null
   private healthBarContainer: Rectangle | null = null
   private healthBarFill: Rectangle | null = null
@@ -67,6 +64,9 @@ export class NpcEntity {
 
   setHeightProvider(provider: (tileX: number, tileY: number) => number) {
     this.heightProvider = provider
+    // Invalidate cache to force height recalculation with new provider
+    this.cachedTileX = -1
+    this.cachedTileY = -1
     this.updateNodePosition()
   }
 
@@ -90,116 +90,95 @@ export class NpcEntity {
       case NpcType.GIANT_RAT:
         this.createRat()
         break
+      case NpcType.GUARD:
+        this.createGuard()
+        break
       default:
         this.createDefaultNpc()
     }
   }
 
   private createChicken() {
-    // Body (ellipsoid)
-    const bodyMat = new StandardMaterial('chickenBody_' + this.id, this.scene)
-    bodyMat.diffuseColor = new Color3(1, 1, 0.9) // White/cream
-    bodyMat.specularColor = Color3.Black()
+    const res = SharedResources.get()
 
+    // Body (ellipsoid)
     const body = MeshBuilder.CreateSphere(
       'chickenBody_' + this.id,
       { diameterX: 0.4, diameterY: 0.35, diameterZ: 0.5, segments: 8 },
       this.scene
     )
-    body.material = bodyMat
+    body.material = res.chickenMaterial
     body.position.y = 0.2
     body.parent = this.node
     this.meshes.push(body)
 
     // Head
-    const headMat = new StandardMaterial('chickenHead_' + this.id, this.scene)
-    headMat.diffuseColor = new Color3(1, 1, 0.9)
-    headMat.specularColor = Color3.Black()
-
     const head = MeshBuilder.CreateSphere(
       'chickenHead_' + this.id,
       { diameter: 0.2, segments: 8 },
       this.scene
     )
-    head.material = headMat
+    head.material = res.chickenMaterial
     head.position.set(0, 0.4, 0.2)
     head.parent = this.node
     this.meshes.push(head)
 
     // Beak
-    const beakMat = new StandardMaterial('chickenBeak_' + this.id, this.scene)
-    beakMat.diffuseColor = new Color3(1, 0.6, 0) // Orange
-    beakMat.specularColor = Color3.Black()
-
     const beak = MeshBuilder.CreateCylinder(
       'chickenBeak_' + this.id,
       { height: 0.1, diameterTop: 0, diameterBottom: 0.06, tessellation: 6 },
       this.scene
     )
-    beak.material = beakMat
+    beak.material = res.chickenBeakMaterial
     beak.rotation.x = Math.PI / 2
     beak.position.set(0, 0.4, 0.35)
     beak.parent = this.node
     this.meshes.push(beak)
 
     // Comb (red thing on head)
-    const combMat = new StandardMaterial('chickenComb_' + this.id, this.scene)
-    combMat.diffuseColor = new Color3(0.9, 0.1, 0.1) // Red
-    combMat.specularColor = Color3.Black()
-
     const comb = MeshBuilder.CreateBox(
       'chickenComb_' + this.id,
       { width: 0.04, height: 0.1, depth: 0.1 },
       this.scene
     )
-    comb.material = combMat
+    comb.material = res.chickenCombMaterial
     comb.position.set(0, 0.5, 0.2)
     comb.parent = this.node
     this.meshes.push(comb)
   }
 
   private createCow() {
-    // Body (large box)
-    const bodyMat = new StandardMaterial('cowBody_' + this.id, this.scene)
-    bodyMat.diffuseColor = new Color3(0.3, 0.2, 0.1) // Brown
-    bodyMat.specularColor = Color3.Black()
+    const res = SharedResources.get()
 
+    // Body (large box)
     const body = MeshBuilder.CreateBox(
       'cowBody_' + this.id,
       { width: 0.5, height: 0.5, depth: 0.8 },
       this.scene
     )
-    body.material = bodyMat
+    body.material = res.cowMaterial
     body.position.y = 0.35
     body.parent = this.node
     this.meshes.push(body)
 
     // Head
-    const headMat = new StandardMaterial('cowHead_' + this.id, this.scene)
-    headMat.diffuseColor = new Color3(0.35, 0.25, 0.15)
-    headMat.specularColor = Color3.Black()
-
     const head = MeshBuilder.CreateBox(
       'cowHead_' + this.id,
       { width: 0.25, height: 0.25, depth: 0.3 },
       this.scene
     )
-    head.material = headMat
+    head.material = res.cowHeadMaterial
     head.position.set(0, 0.45, 0.5)
     head.parent = this.node
     this.meshes.push(head)
 
     // White spots
-    const spotMat = new StandardMaterial('cowSpot_' + this.id, this.scene)
-    spotMat.diffuseColor = new Color3(1, 1, 1)
-    spotMat.specularColor = Color3.Black()
-
     const spot = MeshBuilder.CreateDisc(
       'cowSpot_' + this.id,
       { radius: 0.12, tessellation: 8 },
       this.scene
     )
-    spot.material = spotMat
+    spot.material = res.cowSpotMaterial
     spot.rotation.y = Math.PI / 2
     spot.position.set(0.26, 0.4, 0)
     spot.parent = this.node
@@ -207,17 +186,15 @@ export class NpcEntity {
   }
 
   private createGoblin() {
-    // Body (green) - using cylinder instead of capsule for compatibility
-    const bodyMat = new StandardMaterial('goblinBody_' + this.id, this.scene)
-    bodyMat.diffuseColor = new Color3(0.2, 0.7, 0.2) // Bright green
-    bodyMat.specularColor = Color3.Black()
+    const res = SharedResources.get()
 
+    // Body (green) - using cylinder instead of capsule for compatibility
     const body = MeshBuilder.CreateCylinder(
       'goblinBody_' + this.id,
       { height: 0.4, diameterTop: 0.2, diameterBottom: 0.3, tessellation: 8 },
       this.scene
     )
-    body.material = bodyMat
+    body.material = res.goblinMaterial
     body.position.y = 0.25
     body.parent = this.node
     this.meshes.push(body)
@@ -228,22 +205,18 @@ export class NpcEntity {
       { diameter: 0.3, segments: 8 },
       this.scene
     )
-    head.material = bodyMat
+    head.material = res.goblinMaterial
     head.position.set(0, 0.55, 0)
     head.parent = this.node
     this.meshes.push(head)
 
     // Ears (pointy)
-    const earMat = new StandardMaterial('goblinEar_' + this.id, this.scene)
-    earMat.diffuseColor = new Color3(0.15, 0.5, 0.15) // Darker green
-    earMat.specularColor = Color3.Black()
-
     const leftEar = MeshBuilder.CreateCylinder(
       'goblinLeftEar_' + this.id,
       { height: 0.18, diameterTop: 0, diameterBottom: 0.08, tessellation: 6 },
       this.scene
     )
-    leftEar.material = earMat
+    leftEar.material = res.goblinDarkMaterial
     leftEar.rotation.z = Math.PI / 4
     leftEar.position.set(-0.18, 0.7, 0)
     leftEar.parent = this.node
@@ -254,23 +227,19 @@ export class NpcEntity {
       { height: 0.18, diameterTop: 0, diameterBottom: 0.08, tessellation: 6 },
       this.scene
     )
-    rightEar.material = earMat
+    rightEar.material = res.goblinDarkMaterial
     rightEar.rotation.z = -Math.PI / 4
     rightEar.position.set(0.18, 0.7, 0)
     rightEar.parent = this.node
     this.meshes.push(rightEar)
 
     // Nose (small cone)
-    const noseMat = new StandardMaterial('goblinNose_' + this.id, this.scene)
-    noseMat.diffuseColor = new Color3(0.15, 0.5, 0.15)
-    noseMat.specularColor = Color3.Black()
-
     const nose = MeshBuilder.CreateCylinder(
       'goblinNose_' + this.id,
       { height: 0.1, diameterTop: 0, diameterBottom: 0.06, tessellation: 6 },
       this.scene
     )
-    nose.material = noseMat
+    nose.material = res.goblinDarkMaterial
     nose.rotation.x = Math.PI / 2
     nose.position.set(0, 0.55, 0.18)
     nose.parent = this.node
@@ -278,17 +247,15 @@ export class NpcEntity {
   }
 
   private createRat() {
-    // Body
-    const bodyMat = new StandardMaterial('ratBody_' + this.id, this.scene)
-    bodyMat.diffuseColor = new Color3(0.4, 0.35, 0.3) // Gray-brown
-    bodyMat.specularColor = Color3.Black()
+    const res = SharedResources.get()
 
+    // Body
     const body = MeshBuilder.CreateSphere(
       'ratBody_' + this.id,
       { diameterX: 0.3, diameterY: 0.2, diameterZ: 0.5, segments: 8 },
       this.scene
     )
-    body.material = bodyMat
+    body.material = res.ratMaterial
     body.position.y = 0.15
     body.parent = this.node
     this.meshes.push(body)
@@ -299,35 +266,100 @@ export class NpcEntity {
       { diameterX: 0.15, diameterY: 0.12, diameterZ: 0.2, segments: 8 },
       this.scene
     )
-    head.material = bodyMat
+    head.material = res.ratMaterial
     head.position.set(0, 0.15, 0.25)
     head.parent = this.node
     this.meshes.push(head)
 
     // Tail
-    const tailMat = new StandardMaterial('ratTail_' + this.id, this.scene)
-    tailMat.diffuseColor = new Color3(0.7, 0.6, 0.5)
-    tailMat.specularColor = Color3.Black()
-
     const tail = MeshBuilder.CreateCylinder(
       'ratTail_' + this.id,
       { height: 0.4, diameterTop: 0.01, diameterBottom: 0.03, tessellation: 6 },
       this.scene
     )
-    tail.material = tailMat
+    tail.material = res.ratTailMaterial
     tail.rotation.x = Math.PI / 3
     tail.position.set(0, 0.1, -0.35)
     tail.parent = this.node
     this.meshes.push(tail)
   }
 
+  private createGuard() {
+    const res = SharedResources.get()
+
+    // Legs (chainmail)
+    const legs = MeshBuilder.CreateCylinder(
+      'guardLegs_' + this.id,
+      { height: 0.35, diameterTop: 0.22, diameterBottom: 0.18, tessellation: 8 },
+      this.scene
+    )
+    legs.material = res.guardChainmailMaterial
+    legs.position.y = 0.175
+    legs.parent = this.node
+    this.meshes.push(legs)
+
+    // Torso (armored)
+    const torso = MeshBuilder.CreateCylinder(
+      'guardTorso_' + this.id,
+      { height: 0.35, diameterTop: 0.18, diameterBottom: 0.28, tessellation: 8 },
+      this.scene
+    )
+    torso.material = res.guardArmorMaterial
+    torso.position.y = 0.525
+    torso.parent = this.node
+    this.meshes.push(torso)
+
+    // Head
+    const head = MeshBuilder.CreateSphere(
+      'guardHead_' + this.id,
+      { diameter: 0.2, segments: 8 },
+      this.scene
+    )
+    head.material = res.playerSkinMaterial
+    head.position.y = 0.8
+    head.parent = this.node
+    this.meshes.push(head)
+
+    // Helmet
+    const helmet = MeshBuilder.CreateSphere(
+      'guardHelmet_' + this.id,
+      { diameter: 0.24, segments: 8, slice: 0.5 },
+      this.scene
+    )
+    helmet.material = res.guardHelmetMaterial
+    helmet.position.y = 0.82
+    helmet.rotation.x = Math.PI
+    helmet.parent = this.node
+    this.meshes.push(helmet)
+
+    // Spear (pole)
+    const spearPole = MeshBuilder.CreateCylinder(
+      'guardSpearPole_' + this.id,
+      { height: 1.2, diameter: 0.04, tessellation: 6 },
+      this.scene
+    )
+    spearPole.material = res.trunkMaterial
+    spearPole.position.set(0.25, 0.6, 0)
+    spearPole.parent = this.node
+    this.meshes.push(spearPole)
+
+    // Spear tip
+    const spearTip = MeshBuilder.CreateCylinder(
+      'guardSpearTip_' + this.id,
+      { height: 0.15, diameterTop: 0, diameterBottom: 0.06, tessellation: 6 },
+      this.scene
+    )
+    spearTip.material = res.guardArmorMaterial
+    spearTip.position.set(0.25, 1.25, 0)
+    spearTip.parent = this.node
+    this.meshes.push(spearTip)
+  }
+
   private createDefaultNpc() {
-    const mat = new StandardMaterial('npcMat_' + this.id, this.scene)
-    mat.diffuseColor = new Color3(0.5, 0.5, 0.5)
-    mat.specularColor = Color3.Black()
+    const res = SharedResources.get()
 
     const mesh = MeshBuilder.CreateBox('npc_' + this.id, { size: 0.4 }, this.scene)
-    mesh.material = mat
+    mesh.material = res.defaultNpcMaterial
     mesh.position.y = 0.2
     mesh.parent = this.node
     this.meshes.push(mesh)
@@ -337,54 +369,26 @@ export class NpcEntity {
     const def = NPC_DEFINITIONS[this.npcType]
     if (!def) return
 
-    this.guiTexture = AdvancedDynamicTexture.CreateFullscreenUI(
-      'npcUI_' + this.id,
-      true,
-      this.scene
-    )
+    const res = SharedResources.get()
 
-    // Name label
-    this.nameLabel = new TextBlock('npcName_' + this.id, `${def.name} (lvl ${def.combatLevel})`)
-    this.nameLabel.color = def.aggroRange > 0 ? '#ff6b6b' : '#ffff00' // Red for aggressive, yellow for passive
+    // Name label - use shared GUI
+    const labelColor = def.aggroRange > 0 ? '#ff6b6b' : '#ffff00'
+    this.nameLabel = res.createLabel(this.id, `${def.name} (lvl ${def.combatLevel})`, labelColor)
     this.nameLabel.fontSize = 11
-    this.nameLabel.fontFamily = 'Inter, sans-serif'
-    this.nameLabel.outlineWidth = 2
-    this.nameLabel.outlineColor = 'black'
-    this.nameLabel.isVisible = false
-    this.guiTexture.addControl(this.nameLabel)
     this.nameLabel.linkWithMesh(this.node)
     this.nameLabel.linkOffsetY = -70
 
-    // Health bar container
-    this.healthBarContainer = new Rectangle('hpBarContainer_' + this.id)
-    this.healthBarContainer.width = '40px'
-    this.healthBarContainer.height = '6px'
-    this.healthBarContainer.background = 'rgba(0, 0, 0, 0.7)'
-    this.healthBarContainer.thickness = 1
-    this.healthBarContainer.color = 'black'
-    this.guiTexture.addControl(this.healthBarContainer)
+    // Health bar - use shared GUI
+    const healthBar = res.createHealthBar(this.id)
+    this.healthBarContainer = healthBar.container
+    this.healthBarFill = healthBar.fill
     this.healthBarContainer.linkWithMesh(this.node)
     this.healthBarContainer.linkOffsetY = -55
 
-    // Health bar fill
-    this.healthBarFill = new Rectangle('hpBarFill_' + this.id)
-    this.healthBarFill.width = '100%'
-    this.healthBarFill.height = '100%'
-    this.healthBarFill.background = '#22c55e' // Green
-    this.healthBarFill.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT
-    this.healthBarFill.thickness = 0
-    this.healthBarContainer.addControl(this.healthBarFill)
-
-    // Hit splat (hidden by default)
-    this.hitSplatLabel = new TextBlock('hitSplat_' + this.id, '')
-    this.hitSplatLabel.color = '#ff0000'
+    // Hit splat - use shared GUI
+    this.hitSplatLabel = res.createLabel('hitSplat_' + this.id, '', '#ff0000')
     this.hitSplatLabel.fontSize = 14
-    this.hitSplatLabel.fontFamily = 'Inter, sans-serif'
     this.hitSplatLabel.fontWeight = 'bold'
-    this.hitSplatLabel.outlineWidth = 2
-    this.hitSplatLabel.outlineColor = 'black'
-    this.hitSplatLabel.isVisible = false
-    this.guiTexture.addControl(this.hitSplatLabel)
     this.hitSplatLabel.linkWithMesh(this.node)
     this.hitSplatLabel.linkOffsetY = -35
 
@@ -396,11 +400,7 @@ export class NpcEntity {
     if (this.nameLabel) {
       this.nameLabel.isVisible = isHovered && !this.isDead
     }
-    for (const mesh of this.meshes) {
-      mesh.renderOutline = isHovered
-      mesh.outlineWidth = 0.05
-      mesh.outlineColor = new Color3(1, 1, 1)
-    }
+    // Removed outline rendering for performance
   }
 
   private updateHealthBar() {
@@ -438,6 +438,7 @@ export class NpcEntity {
       this.cachedTileX = tileX
       this.cachedTileY = tileY
     }
+    // Position node at ground level - entity meshes have their bottoms at y=0 relative to node
     this.node.position.set(this.x * scale, this.cachedHeightY, this.y * scale)
   }
 
@@ -499,9 +500,10 @@ export class NpcEntity {
   dispose() {
     this.clearMeshes()
     this.node.dispose()
-    if (this.guiTexture) {
-      this.guiTexture.dispose()
-    }
+    const res = SharedResources.get()
+    res.removeControl(this.nameLabel)
+    res.removeControl(this.healthBarContainer)
+    res.removeControl(this.hitSplatLabel)
     if (this.hitSplatTimeout) {
       clearTimeout(this.hitSplatTimeout)
     }

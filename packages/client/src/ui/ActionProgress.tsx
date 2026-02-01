@@ -32,7 +32,7 @@ export function ActionProgress({ duration, action, loop = false }: ActionProgres
         cancelAnimationFrame(rafRef.current)
       }
     }
-  }, [duration])
+  }, [duration, loop])
 
   return (
     <div
@@ -41,40 +41,50 @@ export function ActionProgress({ duration, action, loop = false }: ActionProgres
         bottom: 100,
         left: '50%',
         transform: 'translateX(-50%)',
-        width: 200,
-        pointerEvents: 'none',
-        opacity: 1,
-        transition: 'opacity 0.15s ease-out'
+        width: 220,
+        pointerEvents: 'none'
       }}
     >
       <div
         style={{
-          fontSize: 12,
-          color: '#ffffff',
-          textAlign: 'center',
-          marginBottom: 6,
-          textTransform: 'uppercase',
-          letterSpacing: '0.1em'
-        }}
-      >
-        {action}...
-      </div>
-      <div
-        style={{
-          height: 6,
-          background: 'rgba(0, 0, 0, 0.6)',
-          borderRadius: 3,
-          overflow: 'hidden'
+          padding: '12px 16px',
+          background: 'linear-gradient(180deg, rgba(32, 32, 36, 0.95) 0%, rgba(24, 24, 28, 0.95) 100%)',
+          borderRadius: 8,
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)'
         }}
       >
         <div
           style={{
-            height: '100%',
-            width: `${progress * 100}%`,
-            background: 'linear-gradient(90deg, #b8860b, #daa520)',
-            borderRadius: 3
+            fontSize: 11,
+            fontWeight: 600,
+            color: 'rgba(255, 255, 255, 0.7)',
+            textAlign: 'center',
+            marginBottom: 8,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em'
           }}
-        />
+        >
+          {action}...
+        </div>
+        <div
+          style={{
+            height: 6,
+            background: 'rgba(0, 0, 0, 0.4)',
+            borderRadius: 3,
+            overflow: 'hidden'
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${progress * 100}%`,
+              background: 'linear-gradient(90deg, #c99a3a, #e6bc5a)',
+              borderRadius: 3,
+              boxShadow: '0 0 8px rgba(212, 168, 75, 0.4)'
+            }}
+          />
+        </div>
       </div>
     </div>
   )

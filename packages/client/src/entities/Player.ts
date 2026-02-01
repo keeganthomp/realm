@@ -2,16 +2,15 @@ import {
   Scene,
   TransformNode,
   MeshBuilder,
-  StandardMaterial,
-  Color3,
   Mesh,
-  AnimationGroup,
-  SceneLoader
+  AnimationGroup
 } from '@babylonjs/core'
 import '@babylonjs/loaders/glTF'
-import { AdvancedDynamicTexture, TextBlock } from '@babylonjs/gui'
+import { TextBlock } from '@babylonjs/gui'
 import { Direction, getDirection, TILE_SIZE } from '@realm/shared'
 import type { Position } from '@realm/shared'
+import { SharedResources } from '../systems/SharedResources'
+import { AssetManager } from '../systems/AssetManager'
 
 const MOVE_SPEED = 3 // pixels per frame at 60fps
 const MODEL_PATH = '/assets/models/'
@@ -38,13 +37,13 @@ export class Player {
   private currentAnim: AnimationGroup | null = null
 
   private path: Position[] = []
+  private pathIndex: number = 0 // Use index pointer instead of shift() for O(1) access
   private currentTarget: Position | null = null
   private onPathComplete?: () => void
   private actionTarget: Position | null = null
   private actionMode: 'skilling' | 'combat' | 'cooking' | 'chopping' | null = null
   private heightProvider: ((tileX: number, tileY: number) => number) | null = null
 
-  private guiTexture: AdvancedDynamicTexture | null = null
   private nameLabel: TextBlock | null = null
 
   constructor(startPosition: Position, scene: Scene) {
@@ -62,14 +61,12 @@ export class Player {
 
   private async loadModel() {
     try {
-      const result = await SceneLoader.ImportMeshAsync('', MODEL_PATH, MODEL_FILE, this.scene)
+      // Use AssetManager for efficient model loading and sharing
+      const assetManager = AssetManager.get()
+      const result = await assetManager.instantiate(MODEL_PATH, MODEL_FILE, 'player')
 
-      // Parent all meshes to our node
-      for (const mesh of result.meshes) {
-        if (!mesh.parent) {
-          mesh.parent = this.node
-        }
-      }
+      // Parent the instantiated model to our node
+      result.rootNode.parent = this.node
 
       // Find animations - look for common naming patterns
       for (const animGroup of result.animationGroups) {
@@ -124,29 +121,22 @@ export class Player {
   }
 
   private createFallbackMeshes() {
-    // Simple fallback if model doesn't load
-    const bodyMat = new StandardMaterial('playerBodyMat', this.scene)
-    bodyMat.diffuseColor = new Color3(0.15, 0.15, 0.16)
-    bodyMat.specularColor = Color3.Black()
+    const res = SharedResources.get()
 
-    const skinMat = new StandardMaterial('playerSkinMat', this.scene)
-    skinMat.diffuseColor = new Color3(0.96, 0.82, 0.66)
-    skinMat.specularColor = Color3.Black()
-
-    // Body
+    // Body - center at half height so bottom is at y=0 (ground level)
     const body = MeshBuilder.CreateCylinder(
       'playerBody',
       { height: 0.8, diameter: 0.4, tessellation: 8 },
       this.scene
     )
-    body.material = bodyMat
-    body.position.y = 0.6
+    body.material = res.playerBodyMaterial
+    body.position.y = 0.4  // Half of 0.8 height, so bottom is at y=0
     body.parent = this.node
 
-    // Head
+    // Head - positioned above body
     const head = MeshBuilder.CreateSphere('playerHead', { diameter: 0.35, segments: 8 }, this.scene)
-    head.material = skinMat
-    head.position.y = 1.2
+    head.material = res.playerSkinMaterial
+    head.position.y = 1.0  // Adjusted to maintain relative position to body
     head.parent = this.node
 
     this.node.scaling.setAll(1.5)
@@ -154,25 +144,16 @@ export class Player {
   }
 
   private createNameLabel() {
-    this.guiTexture = AdvancedDynamicTexture.CreateFullscreenUI('playerUI', true, this.scene)
-
-    this.nameLabel = new TextBlock('playerName', 'You')
-    this.nameLabel.color = 'white'
+    const res = SharedResources.get()
+    this.nameLabel = res.createLabel('player', 'You')
     this.nameLabel.fontSize = 14
-    this.nameLabel.fontFamily = 'Inter, sans-serif'
-    this.nameLabel.outlineWidth = 2
-    this.nameLabel.outlineColor = 'black'
-
-    this.guiTexture.addControl(this.nameLabel)
+    this.nameLabel.isVisible = true
     this.nameLabel.linkWithMesh(this.node)
     this.nameLabel.linkOffsetY = -72
   }
 
   private createActionIndicators() {
-    const indicatorMat = new StandardMaterial('actionIndicatorMat', this.scene)
-    indicatorMat.diffuseColor = new Color3(0.72, 0.53, 0.04)
-    indicatorMat.specularColor = Color3.Black()
-    indicatorMat.alpha = 0.8
+    const res = SharedResources.get()
 
     for (let i = 0; i < 3; i++) {
       const indicator = MeshBuilder.CreateSphere(
@@ -180,7 +161,7 @@ export class Player {
         { diameter: 0.08, segments: 6 },
         this.scene
       )
-      indicator.material = indicatorMat
+      indicator.material = res.actionIndicatorMaterial
       indicator.parent = this.node
       indicator.isVisible = false
       this.actionIndicators.push(indicator)
@@ -208,7 +189,8 @@ export class Player {
 
   setPath(path: Position[], onComplete?: () => void) {
     this.path = path
-    this.currentTarget = this.path.shift() || null
+    this.pathIndex = 0 // Reset index pointer
+    this.currentTarget = this.path.length > 0 ? this.path[this.pathIndex++] : null
     this.isMoving = this.currentTarget !== null
     this.onPathComplete = onComplete
 
@@ -220,6 +202,9 @@ export class Player {
 
   setHeightProvider(provider: (tileX: number, tileY: number) => number) {
     this.heightProvider = provider
+    // Invalidate cache to force height recalculation with new provider
+    this.cachedTileX = -1
+    this.cachedTileY = -1
     this.updateNodePosition()
   }
 
@@ -276,7 +261,8 @@ export class Player {
       this.position.x = this.currentTarget.x
       this.position.y = this.currentTarget.y
 
-      this.currentTarget = this.path.shift() || null
+      // Use index pointer instead of shift() for O(1) access
+      this.currentTarget = this.pathIndex < this.path.length ? this.path[this.pathIndex++] : null
       if (!this.currentTarget) {
         this.isMoving = false
         this.playAnimation(this.idleAnim)
@@ -330,8 +316,6 @@ export class Player {
 
   dispose() {
     this.node.dispose()
-    if (this.guiTexture) {
-      this.guiTexture.dispose()
-    }
+    SharedResources.get().removeControl(this.nameLabel)
   }
 }

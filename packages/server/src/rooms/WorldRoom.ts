@@ -28,7 +28,8 @@ import {
   calculateCombatXp,
   calculateMaxHp,
   CHUNK_SIZE,
-  getChunkKey
+  getChunkKey,
+  TILE_SIZE
 } from '@realm/shared'
 import type { ChunkData, ChunkKey } from '@realm/shared'
 import { WorldGenerator } from '../world/WorldGenerator'
@@ -38,6 +39,7 @@ import {
   savePlayerInventory,
   savePlayerBank
 } from '../database'
+import { SpatialHashGrid } from '../spatial/SpatialHashGrid'
 
 const MAX_INVENTORY_SIZE = 28
 
@@ -60,6 +62,10 @@ export class WorldRoom extends Room {
   private playerChunks: Map<string, Set<ChunkKey>> = new Map()
   private chunkObjectIds: Map<ChunkKey, Set<string>> = new Map()
   private objectToChunk: Map<string, ChunkKey> = new Map()
+
+  // Spatial hash grids for O(1) proximity queries (5 tiles per cell)
+  private playerGrid: SpatialHashGrid<Player & { sessionId: string }> = new SpatialHashGrid(5 * TILE_SIZE)
+  private npcGrid: SpatialHashGrid<NPC> = new SpatialHashGrid(5 * TILE_SIZE)
 
   onCreate() {
     console.log('=== onCreate called ===', { roomId: this.roomId })
@@ -86,6 +92,11 @@ export class WorldRoom extends Room {
 
       player.x = data.x
       player.y = data.y
+
+      // Update spatial grid position
+      const gridPlayer = player as Player & { sessionId: string }
+      gridPlayer.sessionId = client.sessionId
+      this.playerGrid.update(gridPlayer)
 
       if (data.path && data.path.length > 0) {
         const target = data.path[data.path.length - 1]
@@ -221,153 +232,40 @@ export class WorldRoom extends Room {
     console.error('WorldRoom error for client', client.sessionId, error)
   }
 
-  private spawnWorldObjects() {
-    let objectId = 0
-
-    // Spawn trees in specific locations
-    const treeLocations = [
-      { x: 5, y: 5 },
-      { x: 6, y: 5 },
-      { x: 7, y: 5 },
-      { x: 5, y: 6 },
-      { x: 7, y: 6 },
-      { x: 25, y: 8 },
-      { x: 26, y: 8 },
-      { x: 27, y: 8 },
-      { x: 25, y: 9 },
-      { x: 27, y: 9 },
-      { x: 30, y: 15 },
-      { x: 31, y: 15 },
-      { x: 32, y: 15 }
-    ]
-
-    for (const loc of treeLocations) {
-      const obj = new WorldObject()
-      obj.id = `tree_${objectId++}`
-      obj.objectType = WorldObjectType.TREE
-      const pos = tileToWorld({ tileX: loc.x, tileY: loc.y })
-      obj.x = pos.x
-      obj.y = pos.y
-      this.state.worldObjects.set(obj.id, obj)
-    }
-
-    // Spawn fishing spots near water (the pond in the center)
-    const fishingLocations = [
-      { x: 18, y: 13 },
-      { x: 22, y: 13 },
-      { x: 17, y: 15 },
-      { x: 23, y: 15 },
-      { x: 18, y: 17 },
-      { x: 22, y: 17 }
-    ]
-
-    for (const loc of fishingLocations) {
-      const obj = new WorldObject()
-      obj.id = `fish_${objectId++}`
-      obj.objectType = WorldObjectType.FISHING_SPOT_NET
-      const pos = tileToWorld({ tileX: loc.x, tileY: loc.y })
-      obj.x = pos.x
-      obj.y = pos.y
-      this.state.worldObjects.set(obj.id, obj)
-    }
-
-    // Spawn a permanent fire for cooking
-    const fireLocations = [{ x: 12, y: 12 }]
-
-    for (const loc of fireLocations) {
-      const obj = new WorldObject()
-      obj.id = `fire_${objectId++}`
-      obj.objectType = WorldObjectType.FIRE
-      const pos = tileToWorld({ tileX: loc.x, tileY: loc.y })
-      obj.x = pos.x
-      obj.y = pos.y
-      this.state.worldObjects.set(obj.id, obj)
-    }
-
-    // Spawn bank booth
-    const bankObj = new WorldObject()
-    bankObj.id = `bank_${objectId++}`
-    bankObj.objectType = WorldObjectType.BANK_BOOTH
-    const bankPos = tileToWorld({ tileX: 15, tileY: 8 })
-    bankObj.x = bankPos.x
-    bankObj.y = bankPos.y
-    this.state.worldObjects.set(bankObj.id, bankObj)
-
-    console.log(`Spawned ${objectId} world objects`)
-  }
-
+  // Spawn NPCs from town definitions via WorldGenerator
   private spawnNpcs() {
-    let npcId = 0
+    let npcCount = 0
 
-    // Chickens near starting area
-    const chickenLocations = [
-      { x: 8, y: 12 },
-      { x: 9, y: 13 },
-      { x: 10, y: 12 }
-    ]
+    // Spawn NPCs for chunks around the starting area
+    // Thornwick is roughly at chunks -1,-1 to 1,1
+    for (let chunkX = -2; chunkX <= 2; chunkX++) {
+      for (let chunkY = -2; chunkY <= 2; chunkY++) {
+        const spawns = this.generator.getNpcSpawnsForChunk(chunkX, chunkY)
 
-    for (const loc of chickenLocations) {
-      const npc = new NPC()
-      npc.id = `chicken_${npcId++}`
-      npc.npcType = NpcType.CHICKEN
-      const pos = tileToWorld({ tileX: loc.x, tileY: loc.y })
-      npc.x = pos.x
-      npc.y = pos.y
-      npc.spawnX = pos.x
-      npc.spawnY = pos.y
-      const def = NPC_DEFINITIONS[NpcType.CHICKEN]
-      npc.currentHp = def.hitpoints
-      npc.maxHp = def.hitpoints
-      npc.direction = Direction.DOWN
-      this.state.npcs.set(npc.id, npc)
+        for (const spawn of spawns) {
+          const npc = new NPC()
+          npc.id = spawn.id
+          npc.npcType = spawn.npcType as NpcType
+          npc.x = spawn.x
+          npc.y = spawn.y
+          npc.spawnX = spawn.x
+          npc.spawnY = spawn.y
+
+          const def = NPC_DEFINITIONS[spawn.npcType as NpcType]
+          if (def) {
+            npc.currentHp = def.hitpoints
+            npc.maxHp = def.hitpoints
+          }
+          npc.direction = Direction.DOWN
+
+          this.state.npcs.set(npc.id, npc)
+          this.npcGrid.insert(npc)
+          npcCount++
+        }
+      }
     }
 
-    // Cows in a different area
-    const cowLocations = [
-      { x: 28, y: 12 },
-      { x: 29, y: 13 },
-      { x: 30, y: 12 }
-    ]
-
-    for (const loc of cowLocations) {
-      const npc = new NPC()
-      npc.id = `cow_${npcId++}`
-      npc.npcType = NpcType.COW
-      const pos = tileToWorld({ tileX: loc.x, tileY: loc.y })
-      npc.x = pos.x
-      npc.y = pos.y
-      npc.spawnX = pos.x
-      npc.spawnY = pos.y
-      const def = NPC_DEFINITIONS[NpcType.COW]
-      npc.currentHp = def.hitpoints
-      npc.maxHp = def.hitpoints
-      npc.direction = Direction.DOWN
-      this.state.npcs.set(npc.id, npc)
-    }
-
-    // Goblins (aggressive) in a different area
-    const goblinLocations = [
-      { x: 35, y: 18 },
-      { x: 36, y: 19 }
-    ]
-
-    for (const loc of goblinLocations) {
-      const npc = new NPC()
-      npc.id = `goblin_${npcId++}`
-      npc.npcType = NpcType.GOBLIN
-      const pos = tileToWorld({ tileX: loc.x, tileY: loc.y })
-      npc.x = pos.x
-      npc.y = pos.y
-      npc.spawnX = pos.x
-      npc.spawnY = pos.y
-      const def = NPC_DEFINITIONS[NpcType.GOBLIN]
-      npc.currentHp = def.hitpoints
-      npc.maxHp = def.hitpoints
-      npc.direction = Direction.DOWN
-      this.state.npcs.set(npc.id, npc)
-    }
-
-    console.log(`Spawned ${npcId} NPCs`)
+    console.log(`Spawned ${npcCount} NPCs from town definitions`)
   }
 
   private respawnNpc(npc: NPC) {
@@ -1313,29 +1211,33 @@ export class WorldRoom extends Room {
     })
 
     // Check for aggressive NPCs to aggro nearby players
+    // Uses spatial hash grid for O(1) lookups instead of O(n*m)
     this.state.npcs.forEach((npc: NPC) => {
       if (npc.isDead || npc.targetId) return
 
       const npcDef = NPC_DEFINITIONS[npc.npcType as NpcType]
       if (!npcDef || npcDef.aggroRange <= 0) return
 
-      const npcTile = worldToTile({ x: npc.x, y: npc.y })
+      // Query players within aggro range using spatial grid
+      const aggroRangeWorld = npcDef.aggroRange * TILE_SIZE
+      const nearbyPlayers = this.playerGrid.queryRadius(npc.x, npc.y, aggroRangeWorld)
 
-      // Find nearest player within aggro range
+      if (nearbyPlayers.length === 0) return
+
+      // Find nearest among nearby players
       let nearestSessionId: string | null = null
-      let nearestDistance = Infinity
+      let nearestDistanceSq = Infinity
 
-      this.state.players.forEach((player: Player, sessionId: string) => {
-        const playerTile = worldToTile({ x: player.x, y: player.y })
-        const dx = Math.abs(playerTile.tileX - npcTile.tileX)
-        const dy = Math.abs(playerTile.tileY - npcTile.tileY)
-        const distance = Math.max(dx, dy)
+      for (const player of nearbyPlayers) {
+        const dx = player.x - npc.x
+        const dy = player.y - npc.y
+        const distSq = dx * dx + dy * dy
 
-        if (distance <= npcDef.aggroRange && distance < nearestDistance) {
-          nearestSessionId = sessionId
-          nearestDistance = distance
+        if (distSq < nearestDistanceSq) {
+          nearestSessionId = player.sessionId
+          nearestDistanceSq = distSq
         }
-      })
+      }
 
       if (nearestSessionId) {
         npc.targetId = nearestSessionId
@@ -1500,6 +1402,11 @@ export class WorldRoom extends Room {
     this.state.players.set(client.sessionId, player)
     console.log('Player added to state synchronously, skills:', player.skills.size)
 
+    // Add player to spatial grid for efficient aggro queries
+    const gridPlayer = player as Player & { sessionId: string }
+    gridPlayer.sessionId = client.sessionId
+    this.playerGrid.insert(gridPlayer)
+
     // Set initial HP based on hitpoints level
     const hitpointsXp = player.skills.get(SkillType.HITPOINTS)?.xp || 0
     const hitpointsLevel = getLevelFromXp(hitpointsXp)
@@ -1636,6 +1543,11 @@ export class WorldRoom extends Room {
     // Save player data to database before cleanup
     await this.savePlayerData(client.sessionId)
     console.log(`Saved data for ${playerName}`)
+
+    // Remove from spatial grid
+    if (player) {
+      this.playerGrid.remove(player as Player & { sessionId: string })
+    }
 
     this.cancelAction(client.sessionId)
     this.pendingSaves.delete(client.sessionId)

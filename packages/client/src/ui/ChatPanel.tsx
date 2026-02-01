@@ -5,9 +5,35 @@ interface ChatPanelProps {
   onSend: (text: string) => void
 }
 
+// Shared panel styles
+const panelStyle = {
+  background: 'linear-gradient(180deg, rgba(32, 32, 36, 0.95) 0%, rgba(24, 24, 28, 0.95) 100%)',
+  borderRadius: 8,
+  border: '1px solid rgba(255, 255, 255, 0.08)',
+  boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
+  overflow: 'hidden' as const
+}
+
+const headerStyle = {
+  padding: '12px 14px',
+  display: 'flex' as const,
+  justifyContent: 'space-between' as const,
+  alignItems: 'center' as const,
+  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+  background: 'rgba(0, 0, 0, 0.2)'
+}
+
+const labelStyle = {
+  fontSize: 11,
+  fontWeight: 600 as const,
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.08em',
+  color: 'rgba(255, 255, 255, 0.5)'
+}
+
 export function ChatPanel({ messages, onSend }: ChatPanelProps) {
   const [input, setInput] = useState('')
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -28,37 +54,26 @@ export function ChatPanel({ messages, onSend }: ChatPanelProps) {
         position: 'absolute',
         bottom: 16,
         left: 16,
-        width: 320,
-        background: 'rgba(0, 0, 0, 0.6)',
-        borderRadius: 4,
-        overflow: 'hidden',
-        pointerEvents: 'auto',
-        transition: 'all 0.2s ease'
+        width: 340,
+        ...panelStyle,
+        pointerEvents: 'auto'
       }}
     >
       {/* Header */}
       <div
         onClick={() => setExpanded(!expanded)}
-        style={{
-          padding: '10px 16px',
-          cursor: 'pointer',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottom: expanded ? '1px solid rgba(255,255,255,0.1)' : 'none'
-        }}
+        style={{ ...headerStyle, cursor: 'pointer' }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            color: '#a3a3a3'
-          }}
-        >
-          Chat
+        <span style={labelStyle}>Chat</span>
+        <span style={{
+          color: 'rgba(255, 255, 255, 0.4)',
+          fontSize: 14,
+          fontWeight: 400,
+          width: 16,
+          textAlign: 'center'
+        }}>
+          {expanded ? '−' : '+'}
         </span>
-        <span style={{ color: '#a3a3a3', fontSize: 12 }}>{expanded ? '−' : '+'}</span>
       </div>
 
       {expanded && (
@@ -66,20 +81,40 @@ export function ChatPanel({ messages, onSend }: ChatPanelProps) {
           {/* Messages */}
           <div
             style={{
-              height: 160,
+              height: 140,
               overflowY: 'auto',
-              padding: 12
+              padding: '12px 14px',
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(255,255,255,0.2) transparent'
             }}
           >
             {messages.length === 0 ? (
-              <div style={{ color: '#666', fontSize: 12, fontStyle: 'italic' }}>
+              <div style={{
+                color: 'rgba(255, 255, 255, 0.3)',
+                fontSize: 12,
+                fontStyle: 'italic'
+              }}>
                 No messages yet...
               </div>
             ) : (
               messages.map((msg, i) => (
-                <div key={i} style={{ marginBottom: 6 }}>
-                  <span style={{ color: '#b8860b', fontSize: 13 }}>{msg.sender}:</span>{' '}
-                  <span style={{ color: '#ffffff', fontSize: 13 }}>{msg.text}</span>
+                <div key={i} style={{
+                  marginBottom: 8,
+                  lineHeight: 1.4
+                }}>
+                  <span style={{
+                    color: msg.sender === 'System' ? '#f87171' : '#d4a84b',
+                    fontSize: 12,
+                    fontWeight: 500
+                  }}>
+                    {msg.sender}:
+                  </span>{' '}
+                  <span style={{
+                    color: 'rgba(255, 255, 255, 0.85)',
+                    fontSize: 12
+                  }}>
+                    {msg.text}
+                  </span>
                 </div>
               ))
             )}
@@ -87,7 +122,7 @@ export function ChatPanel({ messages, onSend }: ChatPanelProps) {
           </div>
 
           {/* Input */}
-          <form onSubmit={handleSubmit} style={{ padding: '0 12px 12px' }}>
+          <form onSubmit={handleSubmit} style={{ padding: '0 10px 10px' }}>
             <input
               type="text"
               value={input}
@@ -95,20 +130,23 @@ export function ChatPanel({ messages, onSend }: ChatPanelProps) {
               placeholder="Type a message..."
               style={{
                 width: '100%',
-                padding: '8px 12px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: 4,
+                padding: '10px 14px',
+                background: 'rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: 6,
                 color: '#ffffff',
-                fontSize: 13,
+                fontSize: 12,
                 outline: 'none',
-                transition: 'border-color 0.2s ease'
+                transition: 'border-color 0.15s ease, background 0.15s ease',
+                boxSizing: 'border-box'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#b8860b'
+                e.target.style.borderColor = 'rgba(212, 168, 75, 0.5)'
+                e.target.style.background = 'rgba(0, 0, 0, 0.4)'
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                e.target.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+                e.target.style.background = 'rgba(0, 0, 0, 0.3)'
               }}
             />
           </form>

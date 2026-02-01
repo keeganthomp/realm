@@ -47,12 +47,12 @@ Build a medieval fantasy 2D MMO with click-to-action gameplay, skill progression
 - Spritesheet atlases for performance
 - Aseprite for asset creation
 
-### World Building: **In-Game Dev Editor (Jagex-Style)**
-- Hand-authored world using proprietary in-game editor (dev mode)
-- No procedural world generation - every tile is intentionally placed
-- Chunk-based JSON format for saving/loading regions
-- Hot-reload for rapid iteration
-- Procedural only for deterministic decoration (same seed = same clutter)
+### World Building: **Data-Driven Town System**
+- Towns defined as TypeScript data files in `shared/src/towns/`
+- Each town specifies bounds, buildings, NPCs, objects, tile overrides
+- WorldGenerator applies town data during chunk generation
+- Hybrid approach: structured towns within procedural wilderness
+- Agentic design - AI assists in creating town layouts from high-level descriptions
 
 ### Database: **PostgreSQL + Drizzle ORM**
 - PostgreSQL for persistent player data, items, skills
@@ -318,94 +318,90 @@ Level 99 cap (or 120 for endgame)
 
 ---
 
-### Phase 6: World Editor (Jagex-Style Tooling)
-**Goal**: In-game dev editor for hand-authoring the world
+### Phase 6: Town System Architecture ✅
+**Goal**: Data-driven town system for agentic world design
 
-This is the highest-leverage work. Jagex didn't generate Varrock - they painted it with internal tools.
+Instead of a manual in-game editor, we use TypeScript data files that define towns declaratively. AI agents can generate and iterate on town designs from high-level descriptions.
 
-#### 6.1 Core Editor Framework
-- [ ] Dev mode toggle (only in development builds)
-- [ ] Editor UI panel system (palette, brush, selection, properties)
-- [ ] Mouse/keyboard controls for editor (separate from gameplay)
-- [ ] Undo/redo system
-- [ ] Grid overlay and snap-to-grid
+#### 6.1 Town Definition System ✅
+- [x] TownDefinition interface with bounds, buildings, NPCs, objects
+- [x] BuildingDefinition with walls, floors, doors
+- [x] NpcSpawnDefinition with patrol areas
+- [x] WorldObjectPlacement for static objects
+- [x] TileOverride for roads, paths, water features
+- [x] Town registry with registration functions
 
-#### 6.2 Terrain Editing
-- [ ] Tile brush (paint terrain types: grass, dirt, stone, water, sand)
-- [ ] Height brush (raise/lower terrain levels)
-- [ ] Eraser tool
-- [ ] Fill tool for large areas
-- [ ] Cliff faces auto-generated between height levels (existing)
+#### 6.2 WorldGenerator Integration ✅
+- [x] Apply town tiles during chunk generation
+- [x] Building wall/floor rendering
+- [x] Town objects placed automatically
+- [x] Hybrid approach: towns within procedural wilderness
+- [x] Height-aware building placement
 
-#### 6.3 Prop Placement
-- [ ] Prop palette (buildings, fences, rocks, trees, decorations)
-- [ ] Place/move/rotate/delete props
-- [ ] Snap to tile grid
-- [ ] Transform gizmos (position, rotation, scale)
-- [ ] Prop library browser with categories
+#### 6.3 Town Utilities ✅
+- [x] isInTownBounds() - Check if tile is in a town
+- [x] isBuildingWall() - Check if tile is a wall
+- [x] getTownAtTile() - Find town at position
+- [x] Path creation helpers
+- [x] Area fill helpers
 
-#### 6.4 Spawn & Interactable Placement
-- [ ] NPC spawn points (with type, level, aggro settings)
-- [ ] Resource nodes (trees, rocks, fishing spots)
-- [ ] Interactables (bank booth, furnace, anvil, cooking fire)
-- [ ] Shop NPCs with inventory configuration
-- [ ] Zone boundaries and transitions
-
-#### 6.5 Data Persistence
-- [ ] Chunk schema definition (JSON format)
-- [ ] Save chunk to file
-- [ ] Load chunk from file
-- [ ] Hot-reload chunks without restart
-- [ ] Schema versioning and migrations
-- [ ] Chunk validation on save
-
-#### 6.6 Performance & Streaming
-- [ ] Spatial hashing for efficient queries
-- [ ] Chunk streaming (load/unload based on player position)
-- [ ] LOD system for distant objects
-- [ ] Instanced rendering for repeated props
-
-**Deliverable**: Functional world editor for building game content
+**Deliverable**: Data-driven town system ✅
 
 ---
 
-### Phase 7: First Town (Starter Zone)
-**Goal**: Hand-craft the tutorial/starting area using the editor
+### Phase 7: First Town - Thornwick ✅
+**Goal**: Create the first town using the data-driven system
 
-Like Lumbridge - the first experience every player has. This proves out the editor pipeline.
+Thornwick is a 48x48 tile medieval market town inspired by Varrock.
 
-#### 7.1 Town Layout
-- [ ] Greybox town with placeholder meshes (grid-snapped)
-- [ ] Lock scale, road widths, building footprints
-- [ ] Central spawn point
-- [ ] Town square / plaza
-- [ ] Roads connecting key locations
+#### 7.1 Town Layout ✅
+- [x] 48x48 tile area centered around player spawn
+- [x] Perimeter walls with south gate
+- [x] Central marketplace square
+- [x] Stone road network connecting buildings
+- [x] Small pond in southwest corner
 
-#### 7.2 Essential Buildings
-- [ ] Bank (with working bank booth)
-- [ ] General store (buy/sell basic items)
-- [ ] Furnace building (for future smithing)
-- [ ] Church/chapel (for future prayer)
-- [ ] Player spawn / respawn point
+#### 7.2 Buildings ✅
+- [x] Thornwick Keep (northern castle, 16x12)
+- [x] Thornwick Bank (east side, 8x6)
+- [x] General Store (west side, 7x6)
+- [x] Blacksmith (southwest, 8x7)
+- [x] The Rusty Sword Inn (southeast, 10x8)
 
-#### 7.3 Skilling Areas (adjacent to town)
-- [ ] Forest patch (3-5 trees for woodcutting)
-- [ ] Fishing spot (river or pond)
-- [ ] Cooking fire / range
-- [ ] Mining rocks (copper, tin for future smithing)
+#### 7.3 World Objects ✅
+- [x] Bank booth inside bank
+- [x] Trees scattered around town
+- [x] Oak trees near the keep
+- [x] Willow tree by the pond
+- [x] Fishing spot in pond
 
-#### 7.4 Combat Areas (outside town)
-- [ ] Chicken coop / farm (level 1 chickens)
-- [ ] Cow field (level 2 cows)
-- [ ] Goblin camp (level 5 goblins, slightly further out)
+#### 7.4 NPCs ✅
+- [x] Guards at south gate (passive, won't attack players)
+- [x] Guards at keep entrance (passive)
+- [x] Chickens near the inn
+- [x] Giant rat in alleys
 
-#### 7.5 NPCs & Signage
+#### 7.5 Town Decoration & Polish ✅
+- [x] Fix guards using passive GUARD NPC type (not aggressive goblins)
+- [x] Central marketplace fountain
+- [x] 4 colored market stalls (red, blue, green, yellow)
+- [x] Torches at key locations (marketplace corners, bank, keep)
+- [x] Cooking fire inside the inn
+- [x] Blacksmith exterior: anvil, barrel, crate
+- [x] Inn exterior: bench, table, barrels, flower patches
+- [x] General store: crates, barrel, sign post
+- [x] South gate: hay bales
+- [x] Corner bushes for visual softening
+- [x] Rocks near fishing pond
+
+#### 7.6 Remaining Work
 - [ ] Tutorial NPC / guide
-- [ ] Shopkeepers
-- [ ] Signs pointing to locations
-- [ ] Wandering townsfolk (ambient)
+- [ ] Shopkeeper NPCs (functional shops)
+- [ ] Mining rocks outside town
+- [ ] Cow field outside town
+- [ ] Goblin camp further out
 
-**Deliverable**: Complete starter town playable end-to-end
+**Deliverable**: Polished, vibrant starter town ✅
 
 ---
 
@@ -489,13 +485,8 @@ realm/
 │   │   │   ├── main.tsx        # Entry point
 │   │   │   ├── App.tsx         # React app with UI overlays
 │   │   │   ├── Game.ts         # Main game controller
-│   │   │   ├── entities/       # Player, RemotePlayer, WorldObjectEntity
-│   │   │   ├── systems/        # Camera, Pathfinding, NetworkManager, TerrainRenderer
-│   │   │   ├── editor/         # Dev mode world editor (Phase 6)
-│   │   │   │   ├── Editor.ts           # Main editor controller
-│   │   │   │   ├── tools/              # TileBrush, HeightBrush, PropPlacer, SpawnPlacer
-│   │   │   │   ├── ui/                 # EditorPanel, Palette, PropertyInspector
-│   │   │   │   └── ChunkManager.ts     # Save/load/hot-reload chunks
+│   │   │   ├── entities/       # Player, RemotePlayer, WorldObjectEntity, NpcEntity
+│   │   │   ├── systems/        # Camera, Pathfinding, NetworkManager, TilemapRenderer
 │   │   │   └── ui/             # React components (SkillsPanel, InventoryPanel, Chat, etc.)
 │   │   ├── index.html
 │   │   └── package.json
@@ -504,24 +495,25 @@ realm/
 │   │   ├── src/
 │   │   │   ├── index.ts        # Server entry point
 │   │   │   ├── rooms/          # WorldRoom (main game room)
-│   │   │   ├── schemas/        # Player, WorldState, WorldObject schemas
+│   │   │   ├── schemas/        # Player, WorldState, WorldObject, NPC schemas
+│   │   │   ├── world/          # WorldGenerator (procedural + town integration)
 │   │   │   └── database/       # Drizzle ORM schema and queries
 │   │   ├── drizzle.config.ts
 │   │   └── package.json
 │   │
 │   └── shared/                 # Shared types and game data
 │       └── src/
-│           ├── index.ts        # Core types, tile constants, coordinate utils
+│           ├── index.ts        # Core types, coordinate utils
+│           ├── types.ts        # Base types (TileType, Position, Direction)
 │           ├── skills.ts       # 23 skill definitions, XP formulas
 │           ├── items.ts        # Item definitions (logs, fish, etc.)
+│           ├── npcs.ts         # NPC definitions (combat stats, loot tables)
 │           ├── worldObjects.ts # World object definitions (trees, fishing spots)
-│           └── chunks/         # Chunk schema, validation, migrations
-│
-├── world/                      # Hand-authored world data (checked in)
-│   ├── chunks/                 # Chunk JSON files
-│   │   ├── starter-town.json   # First town (Phase 7)
-│   │   └── ...
-│   └── props/                  # Prop definitions
+│           ├── combat.ts       # Combat formulas and calculations
+│           ├── chunks/         # Chunk schema, validation
+│           └── towns/          # Town definitions (data-driven world design)
+│               ├── index.ts    # Town system, registry, utilities
+│               └── thornwick.ts # First town - Thornwick
 │
 ├── assets/
 │   ├── models/                 # Blender source files (.blend)
@@ -588,7 +580,7 @@ pnpm typecheck        # TypeScript type checking
 | Build | Vite 6 | Fast HMR, modern bundling |
 | Linting | ESLint 9 + Prettier | Consistent code style |
 | Package manager | pnpm | Fast, efficient, workspaces |
-| World building | In-game dev editor | Hand-authored like Jagex, not procedural |
+| World building | Data-driven towns | TypeScript definitions, agentic design |
 | 3D assets | Blender → glTF | Free, fast iteration, native Babylon.js format |
 
 ---
@@ -606,9 +598,19 @@ pnpm typecheck        # TypeScript type checking
 
 ## Current Status
 
-**Phases 1-5.5 Complete** - Full combat system and 3D terrain working.
+**Phases 1-7 Complete** - Full combat system, 3D terrain, town system, and first town (Thornwick) fully decorated and polished.
 
-**Next: Phase 6 (World Editor)** - The current terrain is placeholder. We're building Jagex-style internal tooling to hand-author every tile, prop, and spawn. No procedural world generation.
+**Next: Phase 8 (Equipment & Crafting)** - Add equipment slots, mining, smithing, and gear progression.
+
+### Thornwick Town (Phase 7)
+- 48x48 tile medieval market town with perimeter walls
+- 5 buildings: Keep, Bank, General Store, Blacksmith, Inn
+- Passive GUARD NPCs at gates and keep (won't attack players)
+- Central marketplace with fountain and 4 colored market stalls
+- Torches throughout for atmospheric lighting
+- Decorative props: barrels, crates, benches, tables, hay bales, bushes, rocks, flower patches
+- Cooking fire in the inn, anvil at blacksmith
+- Fishing pond with willow tree
 
 ### Combat System (Phase 5)
 - NPCs: Chicken (lvl 1), Cow (lvl 2), Goblin (lvl 5 aggressive)
@@ -630,41 +632,60 @@ pnpm typecheck        # TypeScript type checking
 - Q/E keys rotate camera 45°
 - All entities positioned at correct Y height
 
-### NPC Locations
-| NPC | Tiles | Notes |
-|-----|-------|-------|
-| Chicken x3 | (8,12), (9,13), (10,12) | Easy kills near spawn |
-| Cow x3 | (28,12), (29,13), (30,12) | East side |
-| Goblin x2 | (35,18), (36,19) | Aggressive, harder |
+### NPC Locations (Thornwick)
+| NPC | Location | Notes |
+|-----|----------|-------|
+| Guard x2 | South gate (22,44), (26,44) | Passive, patrol gate area |
+| Guard x2 | Keep entrance (22,14), (26,14) | Passive, patrol keep |
+| Chicken x2 | Near inn (38,40), (40,42) | Easy combat |
+| Giant Rat x1 | Southwest alley (6,40) | Medium combat |
+
+### World Objects (Thornwick)
+| Object | Location | Purpose |
+|--------|----------|---------|
+| Fountain | Central marketplace (24,26) | Decorative centerpiece |
+| Market Stalls x4 | Around marketplace | Red, blue, green, yellow awnings |
+| Torches x8 | Gates, keep, bank, marketplace | Atmospheric lighting |
+| Anvil | Blacksmith exterior (13,33) | Future smithing |
+| Cooking Fire | Inside inn (38,34) | Cooking skill |
+| Bank Booth | Inside bank (40,20) | Banking |
+| Fishing Spot | Pond (6,44) | Fishing skill |
 
 ## Next Steps
 
-1. **Phase 6: World Editor** (Highest Priority)
-   - Build in-game dev editor for hand-authoring world content
-   - Tile brush for painting terrain types
-   - Height brush for elevation changes
-   - Prop placement system (buildings, trees, rocks, decorations)
-   - Spawn/interactable placement (NPCs, resources, bank booths)
-   - Save/load chunk JSON with hot-reload
-   - This is the single highest-leverage thing we can build next
+1. **Expand Thornwick** (Content)
+   - Add tutorial NPC with dialogue
+   - Implement functional shops (buy/sell)
+   - Add mining rocks outside town walls
+   - Create cow field and goblin camp outside walls
+   - Add ambient townsfolk NPCs
 
-2. **Phase 7: First Town**
-   - Use the editor to build starter zone (Lumbridge-equivalent)
-   - Bank, general store, key buildings
-   - Adjacent skilling areas (trees, fishing, cooking)
-   - Combat areas outside town (chickens, cows, goblins)
+2. **Phase 8: Equipment & Crafting**
+   - Equipment slots UI (helm, body, legs, weapon, shield)
+   - Stat bonuses from gear
+   - Mining skill (rocks → ore)
+   - Smithing skill (ore → bar → item at anvil)
+   - Bronze/Iron tier gear
+
+3. **Phase 9: Second Town**
+   - Design and implement a second town
+   - Zone transitions between areas
+   - Different biome/theme (coastal port or mountain village)
 
 ---
 
-## Asset Pipeline (Jagex-Style)
+## Asset Pipeline
 
-### World Building Workflow
+### World Building Workflow (Data-Driven Towns)
 ```
-1. Greybox → Rough layout with primitives in editor
-2. Lock dimensions → Finalize scale, roads, building footprints
-3. Replace greybox → Swap primitives with real props
-4. Polish → Lighting, fog, ambient details
+1. Design → Describe town layout, buildings, NPCs at high level
+2. Define → Create TypeScript town definition file
+3. Iterate → Adjust coordinates, add buildings, place objects
+4. Test → Load game, verify layout, refine
 ```
+
+Towns are defined in `packages/shared/src/towns/` as TypeScript data files.
+The WorldGenerator applies town data during chunk generation.
 
 ### 3D Assets (Blender → Babylon.js)
 - Model in Blender (free, fast iteration)

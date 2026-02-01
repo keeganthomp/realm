@@ -1,12 +1,20 @@
 import { CHUNK_SIZE, TILE_SIZE, TileType } from '@realm/shared'
 import type { ChunkData, ChunkObjectData } from '@realm/shared'
-import { WorldObjectType } from '@realm/shared'
+import {
+  WorldObjectType,
+  getAllTowns,
+  isInTownBounds,
+  isBuildingWall,
+  type TownDefinition
+} from '@realm/shared'
 
 export class WorldGenerator {
   private seed: number
+  private towns: TownDefinition[]
 
   constructor(seed: number) {
     this.seed = seed
+    this.towns = getAllTowns()
   }
 
   generateChunk(chunkX: number, chunkY: number): ChunkData {
@@ -18,11 +26,25 @@ export class WorldGenerator {
       .map(() => Array(CHUNK_SIZE).fill(0))
     const objects: ChunkObjectData[] = []
 
+    // Track which tiles are used by towns
+    const townTiles: Set<string> = new Set()
+
+    // First pass: Apply town tiles
+    for (const town of this.towns) {
+      this.applyTownToChunk(chunkX, chunkY, town, tiles, heights, objects, townTiles)
+    }
+
+    // Second pass: Procedural generation for non-town tiles
     for (let localY = 0; localY < CHUNK_SIZE; localY++) {
       for (let localX = 0; localX < CHUNK_SIZE; localX++) {
         const worldX = chunkX * CHUNK_SIZE + localX
         const worldY = chunkY * CHUNK_SIZE + localY
+        const key = `${worldX},${worldY}`
 
+        // Skip if this tile is part of a town
+        if (townTiles.has(key)) continue
+
+        // Procedural terrain generation
         const heightNoise = this.fractalNoise(worldX, worldY, 0.05)
         const moistureNoise = this.fractalNoise(worldX + 9999, worldY - 9999, 0.04)
 
@@ -40,6 +62,7 @@ export class WorldGenerator {
 
         tiles[localY][localX] = tileType
 
+        // Try to place procedural objects
         const object = this.tryPlaceObject(worldX, worldY, tileType, moistureNoise)
         if (object) {
           objects.push(object)
@@ -48,6 +71,120 @@ export class WorldGenerator {
     }
 
     return { chunkX, chunkY, tiles, heights, objects }
+  }
+
+  private applyTownToChunk(
+    chunkX: number,
+    chunkY: number,
+    town: TownDefinition,
+    tiles: TileType[][],
+    heights: number[][],
+    objects: ChunkObjectData[],
+    townTiles: Set<string>
+  ): void {
+    const chunkStartX = chunkX * CHUNK_SIZE
+    const chunkStartY = chunkY * CHUNK_SIZE
+    const chunkEndX = chunkStartX + CHUNK_SIZE
+    const chunkEndY = chunkStartY + CHUNK_SIZE
+
+    // Check if chunk overlaps with town bounds
+    const townEndX = town.bounds.x + town.bounds.width
+    const townEndY = town.bounds.y + town.bounds.height
+
+    if (
+      chunkStartX >= townEndX ||
+      chunkEndX <= town.bounds.x ||
+      chunkStartY >= townEndY ||
+      chunkEndY <= town.bounds.y
+    ) {
+      return // No overlap
+    }
+
+    // Build a map of tile overrides for quick lookup
+    const overrideMap = new Map<string, { tileType: TileType; height?: number }>()
+    for (const override of town.tileOverrides) {
+      // Convert town-relative coordinates to world coordinates
+      const worldX = town.bounds.x + override.x
+      const worldY = town.bounds.y + override.y
+      overrideMap.set(`${worldX},${worldY}`, {
+        tileType: override.tileType,
+        height: override.height
+      })
+    }
+
+    // Apply tiles within the overlap region
+    for (let localY = 0; localY < CHUNK_SIZE; localY++) {
+      for (let localX = 0; localX < CHUNK_SIZE; localX++) {
+        const worldX = chunkStartX + localX
+        const worldY = chunkStartY + localY
+
+        if (!isInTownBounds(town, worldX, worldY)) continue
+
+        const key = `${worldX},${worldY}`
+        townTiles.add(key)
+
+        // Check for tile override
+        const override = overrideMap.get(key)
+        if (override) {
+          tiles[localY][localX] = override.tileType
+          heights[localY][localX] = override.height ?? town.baseHeight
+          continue
+        }
+
+        // Check if inside a building
+        let inBuilding = false
+        for (const building of town.buildings) {
+          const buildingWorldX = town.bounds.x + building.x
+          const buildingWorldY = town.bounds.y + building.y
+
+          // Check if this tile is within the building bounds
+          if (
+            worldX >= buildingWorldX &&
+            worldX < buildingWorldX + building.width &&
+            worldY >= buildingWorldY &&
+            worldY < buildingWorldY + building.height
+          ) {
+            // Check if it's a wall tile
+            if (isBuildingWall(building, town.bounds.x, town.bounds.y, worldX, worldY)) {
+              tiles[localY][localX] = TileType.WALL
+              heights[localY][localX] = (building.heightLevel ?? town.baseHeight) + 1
+            } else {
+              tiles[localY][localX] = building.floorTile
+              heights[localY][localX] = building.heightLevel ?? town.baseHeight
+            }
+            inBuilding = true
+            break
+          }
+        }
+
+        if (!inBuilding) {
+          // Default town ground
+          tiles[localY][localX] = town.baseTile
+          heights[localY][localX] = town.baseHeight
+        }
+      }
+    }
+
+    // Add world objects that are within this chunk
+    for (const obj of town.worldObjects) {
+      const worldX = town.bounds.x + obj.x
+      const worldY = town.bounds.y + obj.y
+
+      // Check if object is in this chunk
+      if (
+        worldX >= chunkStartX &&
+        worldX < chunkEndX &&
+        worldY >= chunkStartY &&
+        worldY < chunkEndY
+      ) {
+        objects.push({
+          id: `town_${town.id}_${obj.id}`,
+          objectType: obj.objectType,
+          x: worldX * TILE_SIZE + TILE_SIZE / 2,
+          y: worldY * TILE_SIZE + TILE_SIZE / 2
+        })
+      }
+    }
   }
 
   private tryPlaceObject(
@@ -105,5 +242,42 @@ export class WorldGenerator {
     }
 
     return value / max
+  }
+
+  // Get NPCs that should spawn in a given chunk
+  getNpcSpawnsForChunk(chunkX: number, chunkY: number): Array<{
+    id: string
+    npcType: string
+    x: number
+    y: number
+  }> {
+    const spawns: Array<{ id: string; npcType: string; x: number; y: number }> = []
+    const chunkStartX = chunkX * CHUNK_SIZE
+    const chunkStartY = chunkY * CHUNK_SIZE
+    const chunkEndX = chunkStartX + CHUNK_SIZE
+    const chunkEndY = chunkStartY + CHUNK_SIZE
+
+    for (const town of this.towns) {
+      for (const npc of town.npcs) {
+        const worldX = town.bounds.x + npc.x
+        const worldY = town.bounds.y + npc.y
+
+        if (
+          worldX >= chunkStartX &&
+          worldX < chunkEndX &&
+          worldY >= chunkStartY &&
+          worldY < chunkEndY
+        ) {
+          spawns.push({
+            id: `town_${town.id}_${npc.id}`,
+            npcType: npc.npcType,
+            x: worldX * TILE_SIZE + TILE_SIZE / 2,
+            y: worldY * TILE_SIZE + TILE_SIZE / 2
+          })
+        }
+      }
+    }
+
+    return spawns
   }
 }

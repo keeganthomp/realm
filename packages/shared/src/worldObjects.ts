@@ -17,7 +17,41 @@ export enum WorldObjectType {
   FIRE = 'fire',
 
   // Bank
-  BANK_BOOTH = 'bank_booth'
+  BANK_BOOTH = 'bank_booth',
+
+  // Cooking
+  COOKING_RANGE = 'cooking_range',
+
+  // Market stalls
+  MARKET_STALL_RED = 'market_stall_red',
+  MARKET_STALL_BLUE = 'market_stall_blue',
+  MARKET_STALL_GREEN = 'market_stall_green',
+  MARKET_STALL_YELLOW = 'market_stall_yellow',
+
+  // Water features
+  FOUNTAIN = 'fountain',
+  WELL = 'well',
+
+  // Lighting
+  TORCH_STAND = 'torch_stand',
+
+  // Containers
+  BARREL = 'barrel',
+  CRATE = 'crate',
+
+  // Smithing
+  ANVIL = 'anvil',
+
+  // Furniture
+  BENCH = 'bench',
+  TABLE = 'table',
+
+  // Decorative
+  FLOWER_PATCH = 'flower_patch',
+  SIGN_POST = 'sign_post',
+  HAY_BALE = 'hay_bale',
+  BUSH = 'bush',
+  ROCK = 'rock'
 }
 
 export interface WorldObjectDefinition {
@@ -122,6 +156,238 @@ export const WORLD_OBJECT_DEFINITIONS: Record<WorldObjectType, WorldObjectDefini
     xpGain: 0,
     actionTime: 0, // Instant
     yields: ItemType.LOGS, // Not used, placeholder
+    respawnTime: 0,
+    depletionChance: 0
+  },
+
+  // Cooking Range (permanent cooking station, better than fire)
+  [WorldObjectType.COOKING_RANGE]: {
+    type: WorldObjectType.COOKING_RANGE,
+    name: 'Cooking Range',
+    action: 'Cook',
+    skill: SkillType.COOKING,
+    levelRequired: 1,
+    xpGain: 30,
+    actionTime: 1800,
+    yields: ItemType.COOKED_SHRIMP,
+    respawnTime: 0, // Never depletes
+    depletionChance: 0
+  },
+
+  // Market Stalls (decorative, non-interactive)
+  [WorldObjectType.MARKET_STALL_RED]: {
+    type: WorldObjectType.MARKET_STALL_RED,
+    name: 'Market Stall',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.MARKET_STALL_BLUE]: {
+    type: WorldObjectType.MARKET_STALL_BLUE,
+    name: 'Market Stall',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.MARKET_STALL_GREEN]: {
+    type: WorldObjectType.MARKET_STALL_GREEN,
+    name: 'Market Stall',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.MARKET_STALL_YELLOW]: {
+    type: WorldObjectType.MARKET_STALL_YELLOW,
+    name: 'Market Stall',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+
+  // Water features (decorative)
+  [WorldObjectType.FOUNTAIN]: {
+    type: WorldObjectType.FOUNTAIN,
+    name: 'Fountain',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.WELL]: {
+    type: WorldObjectType.WELL,
+    name: 'Well',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+
+  // Lighting
+  [WorldObjectType.TORCH_STAND]: {
+    type: WorldObjectType.TORCH_STAND,
+    name: 'Torch',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+
+  // Containers (decorative)
+  [WorldObjectType.BARREL]: {
+    type: WorldObjectType.BARREL,
+    name: 'Barrel',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.CRATE]: {
+    type: WorldObjectType.CRATE,
+    name: 'Crate',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+
+  // Smithing
+  [WorldObjectType.ANVIL]: {
+    type: WorldObjectType.ANVIL,
+    name: 'Anvil',
+    action: 'Smith',
+    skill: SkillType.SMITHING,
+    levelRequired: 1,
+    xpGain: 0, // XP varies by item
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+
+  // Furniture (decorative)
+  [WorldObjectType.BENCH]: {
+    type: WorldObjectType.BENCH,
+    name: 'Bench',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.TABLE]: {
+    type: WorldObjectType.TABLE,
+    name: 'Table',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+
+  // Decorative
+  [WorldObjectType.FLOWER_PATCH]: {
+    type: WorldObjectType.FLOWER_PATCH,
+    name: 'Flowers',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.SIGN_POST]: {
+    type: WorldObjectType.SIGN_POST,
+    name: 'Sign Post',
+    action: 'Read',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.HAY_BALE]: {
+    type: WorldObjectType.HAY_BALE,
+    name: 'Hay Bale',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.BUSH]: {
+    type: WorldObjectType.BUSH,
+    name: 'Bush',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
+    respawnTime: 0,
+    depletionChance: 0
+  },
+  [WorldObjectType.ROCK]: {
+    type: WorldObjectType.ROCK,
+    name: 'Rock',
+    action: 'Examine',
+    skill: SkillType.WOODCUTTING,
+    levelRequired: 1,
+    xpGain: 0,
+    actionTime: 0,
+    yields: ItemType.LOGS,
     respawnTime: 0,
     depletionChance: 0
   }
