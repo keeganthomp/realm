@@ -14,7 +14,7 @@ import { AssetManager } from '../systems/AssetManager'
 
 const MOVE_SPEED = 3 // pixels per frame at 60fps
 const MODEL_PATH = '/assets/models/'
-const MODEL_FILE = 'player.glb'
+const MODEL_FILE = 'player.glb?v=2'
 
 export class Player {
   public position: Position
@@ -61,9 +61,29 @@ export class Player {
 
   private async loadModel() {
     try {
+      console.log(`Loading player model from: ${MODEL_PATH}${MODEL_FILE}`)
       // Use AssetManager for efficient model loading and sharing
       const assetManager = AssetManager.get()
       const result = await assetManager.instantiate(MODEL_PATH, MODEL_FILE, 'player')
+      console.log('Player model instantiated, meshes:', result.rootNode.getChildMeshes().length)
+
+      // Debug: Log bounding info to understand model size
+      const meshes = result.rootNode.getChildMeshes()
+      if (meshes.length > 0) {
+        let minY = Infinity, maxY = -Infinity
+        let minX = Infinity, maxX = -Infinity
+        for (const mesh of meshes) {
+          mesh.computeWorldMatrix(true)
+          const bounds = mesh.getBoundingInfo()
+          if (bounds) {
+            minY = Math.min(minY, bounds.boundingBox.minimumWorld.y)
+            maxY = Math.max(maxY, bounds.boundingBox.maximumWorld.y)
+            minX = Math.min(minX, bounds.boundingBox.minimumWorld.x)
+            maxX = Math.max(maxX, bounds.boundingBox.maximumWorld.x)
+          }
+        }
+        console.log(`Player model bounds: height=${(maxY - minY).toFixed(2)}, width=${(maxX - minX).toFixed(2)}, minY=${minY.toFixed(2)}, maxY=${maxY.toFixed(2)}`)
+      }
 
       // Parent the instantiated model to our node
       result.rootNode.parent = this.node
@@ -103,6 +123,7 @@ export class Player {
       )
     } catch (error) {
       console.warn('Failed to load player model, using fallback:', error)
+      console.warn('THIS IS THE FALLBACK MESH - cylinder + sphere')
       this.createFallbackMeshes()
     }
   }
@@ -298,8 +319,10 @@ export class Player {
     if (dx === 0 && dy === 0) return
     const ang = Math.atan2(dx, dy)
     const step = Math.PI / 4
-    // Add Math.PI offset since model faces -Z by default
-    this.node.rotation.y = Math.round(ang / step) * step + Math.PI
+    // Snap rotation to 45-degree increments
+    // Adjust MODEL_ROTATION_OFFSET if model faces wrong direction
+    const MODEL_ROTATION_OFFSET = 0 // Was Math.PI - change if model faces wrong way
+    this.node.rotation.y = Math.round(ang / step) * step + MODEL_ROTATION_OFFSET
   }
 
   private updateNodePosition() {

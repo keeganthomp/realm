@@ -13,7 +13,7 @@ import { AssetManager } from '../systems/AssetManager'
 
 const INTERPOLATION_SPEED = 0.15
 const MODEL_PATH = '/assets/models/'
-const MODEL_FILE = 'player.glb'
+const MODEL_FILE = 'player.glb?v=2'
 
 export class RemotePlayer {
   public position: Position
