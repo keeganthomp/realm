@@ -4,15 +4,16 @@ This file provides guidance to Claude Code when working with this repository. Re
 
 ## Project Overview
 
-**Realm** is a 2D browser MMO inspired by RuneScape (OSRS), built with TypeScript. Players spawn in **Thornwick**, a medieval market town, and can explore, train skills, fight NPCs, and interact with other players in real-time.
+**Realm** is a 2D browser MMO inspired by RuneScape (OSRS), built with TypeScript. Players spawn in **Thornwick**, a medieval market town, and can explore, train skills, fight NPCs, and venture into **The Veil** - a parallel dimension accessed through rifts.
 
 ### Current State
-- **Phases 1-8.5 complete**: Movement, multiplayer, skills, inventory, banking, combat, 3D terrain, town system, equipment, procedural characters
+- **Core systems complete**: Movement, multiplayer, skills (24), inventory, banking, combat, 3D terrain, towns, equipment
+- **The Veil system**: Expedition-based gameplay with stability mechanics, dimension transitions, Veilwalking skill
 - **Equipment system**: 7 slots, bronze/iron/steel tiers, visual gear on characters, NPC drops
-- **Procedural character system**: Joint-based SimpleCharacter with walk/idle animations, OSRS-style chunky aesthetic
-- **Performance optimizations**: Mesh instancing, freezeWorldMatrix for static objects, memory leak fixes
-- **First town**: Thornwick (48x48 tiles) - fully decorated with marketplace, fountain, stalls, torches, props
-- **Next up**: HP regen, damage feedback, mining/smithing, more towns
+- **Procedural character system**: Joint-based SimpleCharacter with walk/idle animations
+- **Engagement systems**: Daily challenges, achievements, XP tracker
+- **First town**: Thornwick (48x48 tiles) with Veil Rift near fountain
+- **Next up**: Veil creatures, Veil-specific loot, depth progression
 
 ## Tech Stack
 
@@ -257,6 +258,40 @@ OSRS-style formulas:
 - `calculateDefenceRoll(defenceLevel, defenceBonus)`
 - `calculateHitChance(attackRoll, defenceRoll)`
 
+### Expeditions (`src/expeditions.ts`)
+
+The Veil expedition system:
+
+```typescript
+interface Expedition {
+  id: string
+  playerId: string
+  riftId: string
+  startTime: number
+  maxDuration: number           // ms
+  maxStability: number
+  currentStability: number
+  stabilityDrainRate: number    // per second
+  currentDepth: number
+  securedLoot: ExpeditionLoot[]
+  unsecuredLoot: ExpeditionLoot[]
+  status: 'active' | 'extracting' | 'completed' | 'failed'
+}
+
+// Stability formulas
+maxStability = 100 + veilwalkingLevel * 5
+drainRate = baseDrain * (1 + (tier-1) * 0.2) * (1 + depth * 0.1)
+```
+
+**Expedition Tiers:**
+| Tier | Name | Level | Duration |
+|------|------|-------|----------|
+| 1 | Shallow Veil | 1 | 10 min |
+| 2 | Deep Veil | 25 | 8 min |
+| 3 | Abyssal Veil | 50 | 6 min |
+| 4 | Void Depths | 75 | 5 min |
+| 5 | The Unnamed Dark | 90 | 4 min |
+
 ---
 
 ## Town System (`packages/shared/src/towns/`)
@@ -447,6 +482,12 @@ pelvis → torso → head
 | UI panels | `client/src/ui/*.tsx` |
 | Database | `server/src/database/schema.ts` |
 | Mesh instancing | `client/src/systems/SharedResources.ts` |
+| **Expedition system** | `shared/src/expeditions.ts` |
+| **Veil rifts** | `shared/src/worldObjects.ts` (VEIL_RIFT) |
+| **Expedition logic** | `server/src/rooms/WorldRoom.ts` (handleEnterRift, etc.) |
+| **Expedition UI** | `client/src/ui/ExpeditionPanel.tsx` |
+| **Dimension visuals** | `client/src/systems/EnvironmentEffects.ts` |
+| **Post-processing** | `client/src/systems/PostProcessManager.ts` |
 
 ---
 

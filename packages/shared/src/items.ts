@@ -75,7 +75,17 @@ export enum ItemType {
 
   // Basic equipment (no requirements)
   WOODEN_SHIELD = 'wooden_shield',
-  LEATHER_BODY = 'leather_body'
+  LEATHER_BODY = 'leather_body',
+
+  // Veil materials
+  VEIL_ESSENCE = 'veil_essence',
+  SHADOW_FRAGMENT = 'shadow_fragment',
+  VOID_SHARD = 'void_shard',
+  ETHEREAL_DUST = 'ethereal_dust',
+
+  // Veil creature drops
+  VEIL_BONES = 'veil_bones',
+  CORRUPTED_HIDE = 'corrupted_hide'
 }
 
 export interface ItemDefinition {
@@ -437,6 +447,52 @@ export const ITEM_DEFINITIONS: Record<ItemType, ItemDefinition> = {
     description: 'Basic leather armor',
     stackable: false,
     value: 20
+  },
+
+  // Veil materials
+  [ItemType.VEIL_ESSENCE]: {
+    type: ItemType.VEIL_ESSENCE,
+    name: 'Veil Essence',
+    description: 'Concentrated energy from The Veil. Used in crafting.',
+    stackable: true,
+    value: 50
+  },
+  [ItemType.SHADOW_FRAGMENT]: {
+    type: ItemType.SHADOW_FRAGMENT,
+    name: 'Shadow Fragment',
+    description: 'A shard of solidified darkness from The Veil.',
+    stackable: true,
+    value: 75
+  },
+  [ItemType.VOID_SHARD]: {
+    type: ItemType.VOID_SHARD,
+    name: 'Void Shard',
+    description: 'A rare crystallized piece of the void. Highly valuable.',
+    stackable: true,
+    value: 250
+  },
+  [ItemType.ETHEREAL_DUST]: {
+    type: ItemType.ETHEREAL_DUST,
+    name: 'Ethereal Dust',
+    description: 'Fine particles that shimmer with otherworldly light.',
+    stackable: true,
+    value: 25
+  },
+
+  // Veil creature drops
+  [ItemType.VEIL_BONES]: {
+    type: ItemType.VEIL_BONES,
+    name: 'Veil Bones',
+    description: 'Bones infused with Veil energy. Worth more Prayer XP.',
+    stackable: false,
+    value: 15
+  },
+  [ItemType.CORRUPTED_HIDE]: {
+    type: ItemType.CORRUPTED_HIDE,
+    name: 'Corrupted Hide',
+    description: 'Leather warped by The Veil. Can be crafted into unique armor.',
+    stackable: false,
+    value: 40
   }
 }
 

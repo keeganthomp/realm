@@ -1,6 +1,6 @@
 import { Client, Room } from '@colyseus/sdk'
 import type { Game } from '../Game'
-import type { Position } from '@realm/shared'
+import type { Position, DailyChallengesData, AchievementType } from '@realm/shared'
 import { Direction, NpcType, EquipmentSlot } from '@realm/shared'
 
 const DEFAULT_SERVER_URL = import.meta.env.DEV ? 'http://localhost:2567' : window.location.origin
@@ -66,6 +66,41 @@ export class NetworkManager {
   public onShopBuySuccess?: (itemType: string, quantity: number, totalCost: number) => void
   public onShopSellSuccess?: (itemType: string, quantity: number, goldReceived: number) => void
   public onShopError?: (message: string) => void
+
+  // Daily challenges callbacks
+  public onDailyChallengesData?: (data: DailyChallengesData) => void
+  public onChallengeProgress?: (challengeIndex: number, progress: number, completed: boolean) => void
+  public onChallengeRewardClaimed?: (challengeIndex: number, rewardXp?: number, rewardSkill?: string, rewardCoins?: number) => void
+
+  // Achievement callbacks
+  public onAchievementsData?: (achievements: AchievementType[], stats: Record<string, number>, cosmetics: { activeTitle: string | null; activeBadge: string | null }) => void
+  public onAchievementUnlocked?: (achievementType: AchievementType) => void
+  public onCosmeticsUpdated?: (cosmetics: { activeTitle: string | null; activeBadge: string | null }) => void
+
+  // Expedition callbacks
+  public onExpeditionStart?: (data: {
+    id: string
+    riftId: string
+    tier: number
+    tierName: string
+    maxDuration: number
+    maxStability: number
+    currentStability: number
+    stabilityDrainRate: number
+  }) => void
+  public onExpeditionUpdate?: (currentStability: number, timeRemaining: number) => void
+  public onExpeditionEnd?: (data: {
+    reason: 'voluntary' | 'time_expired' | 'stability_depleted' | 'death'
+    securedLoot: Array<{ itemType: string; quantity: number }>
+    unsecuredLoot?: Array<{ itemType: string; quantity: number }>
+    lostItems: number
+    veilwalkingXp: number
+    creaturesKilled: number
+    resourcesGathered: number
+    depthReached: number
+    completionBonus?: number
+  }) => void
+  public onStabilityDamage?: (stabilityLost: number, currentStability: number) => void
 
   constructor(game: Game) {
     this.game = game
@@ -322,6 +357,48 @@ export class NetworkManager {
       this.onShopError?.(data.message)
     })
 
+    // Daily challenges messages
+    this.room.onMessage('dailyChallenges', (data: DailyChallengesData) => {
+      this.onDailyChallengesData?.(data)
+    })
+
+    this.room.onMessage(
+      'challengeProgress',
+      (data: { challengeIndex: number; progress: number; completed: boolean }) => {
+        this.onChallengeProgress?.(data.challengeIndex, data.progress, data.completed)
+      }
+    )
+
+    this.room.onMessage(
+      'challengeRewardClaimed',
+      (data: { challengeIndex: number; rewardXp?: number; rewardSkill?: string; rewardCoins?: number }) => {
+        this.onChallengeRewardClaimed?.(data.challengeIndex, data.rewardXp, data.rewardSkill, data.rewardCoins)
+      }
+    )
+
+    // Achievement messages
+    this.room.onMessage(
+      'achievementsData',
+      (data: {
+        achievements: AchievementType[]
+        stats: Record<string, number>
+        cosmetics: { activeTitle: string | null; activeBadge: string | null }
+      }) => {
+        this.onAchievementsData?.(data.achievements, data.stats, data.cosmetics)
+      }
+    )
+
+    this.room.onMessage('achievementUnlocked', (data: { achievementType: AchievementType }) => {
+      this.onAchievementUnlocked?.(data.achievementType)
+    })
+
+    this.room.onMessage(
+      'cosmeticsUpdated',
+      (data: { activeTitle: string | null; activeBadge: string | null }) => {
+        this.onCosmeticsUpdated?.(data)
+      }
+    )
+
     // Equipment update
     this.room.onMessage(
       'equipmentUpdate',
@@ -524,6 +601,23 @@ export class NetworkManager {
       }
     )
 
+    // Expedition messages
+    this.room.onMessage('expeditionStart', (data: { expedition: any }) => {
+      this.onExpeditionStart?.(data.expedition)
+    })
+
+    this.room.onMessage('expeditionUpdate', (data: { currentStability: number; timeRemaining: number }) => {
+      this.onExpeditionUpdate?.(data.currentStability, data.timeRemaining)
+    })
+
+    this.room.onMessage('expeditionEnd', (data: any) => {
+      this.onExpeditionEnd?.(data)
+    })
+
+    this.room.onMessage('stabilityDamage', (data: { stabilityLost: number; currentStability: number }) => {
+      this.onStabilityDamage?.(data.stabilityLost, data.currentStability)
+    })
+
     this.room.onLeave(() => {
       this.onDisconnected?.()
     })
@@ -661,6 +755,26 @@ export class NetworkManager {
   shopSell(shopId: string, itemIndex: number, quantity: number) {
     if (!this.room) return
     this.room.send('shopSell', { shopId, itemIndex, quantity })
+  }
+
+  claimChallengeReward(challengeIndex: number) {
+    if (!this.room) return
+    this.room.send('claimChallengeReward', { challengeIndex })
+  }
+
+  setActiveTitle(title: string | null) {
+    if (!this.room) return
+    this.room.send('setActiveTitle', { title })
+  }
+
+  setActiveBadge(badge: string | null) {
+    if (!this.room) return
+    this.room.send('setActiveBadge', { badge })
+  }
+
+  extractExpedition() {
+    if (!this.room) return
+    this.room.send('extractExpedition', {})
   }
 
   disconnect() {

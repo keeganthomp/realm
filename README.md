@@ -1,6 +1,30 @@
 # REALM
 
-A modern 2D browser MMO inspired by RuneScape, built with TypeScript.
+A 2D browser MMO inspired by RuneScape, featuring a dual-dimension system where players explore the surface world and venture into **The Veil** - a mysterious parallel dimension filled with danger and rare treasures.
+
+## The Story
+
+### The World of Aethermoor
+
+For centuries, the realm of Aethermoor flourished under the protection of the Veil Wardens - an ancient order who guarded the boundary between the mortal world and a parallel dimension known as **The Veil**. This shadowy realm, visible only as shimmering distortions in reality, was said to be a mirror of our world twisted by chaotic energies.
+
+### The Sundering
+
+Fifty years ago, during the event known as **The Sundering**, the barriers weakened. Rifts began appearing across Aethermoor - tears in reality that pulse with otherworldly energy. The Veil Wardens disappeared, leaving behind only their knowledge encoded in the ancient skill of **Veilwalking**.
+
+### The Veil
+
+The Veil is not merely dangerous - it is alive with possibility. Strange creatures roam its twisted landscapes, guarding resources that don't exist in the mortal realm. Brave adventurers who master Veilwalking can enter through rifts, but must manage their **Veil Stability** - the measure of how long their mortal form can withstand the dimension's corrupting influence.
+
+Those who linger too long find their stability depleting, forcing an emergency extraction and the loss of any unsecured treasures. But those who learn to navigate its depths return with riches beyond imagination.
+
+### Thornwick
+
+The market town of **Thornwick** serves as the last bastion of civilization near the largest concentration of rifts. Once a prosperous trading hub, it now attracts adventurers from across Aethermoor seeking fortune in The Veil. The town's bank, smithy, and general store cater to these brave souls, while guards patrol the walls against creatures that occasionally slip through unstable rifts.
+
+A shimmering rift pulses near the town fountain - a constant reminder that The Veil is never far away.
+
+---
 
 ## Tech Stack
 
@@ -38,7 +62,8 @@ realm/
 │   │   ├── src/
 │   │   │   ├── Game.ts           # Main game controller
 │   │   │   ├── entities/         # Player, RemotePlayer, WorldObject, NPC
-│   │   │   ├── systems/          # Camera, Pathfinding, Network, Tilemap
+│   │   │   ├── systems/          # Camera, Pathfinding, Network, Environment
+│   │   │   ├── character/        # Procedural character system
 │   │   │   └── ui/               # React UI components
 │   │   └── package.json
 │   │
@@ -52,150 +77,166 @@ realm/
 │   │
 │   └── shared/          # Shared types and game data
 │       └── src/
-│           ├── index.ts          # Core types, tile constants
 │           ├── types.ts          # Base types (TileType, Position, etc.)
-│           ├── skills.ts         # 23 skill definitions, XP formulas
+│           ├── skills.ts         # 24 skill definitions (including Veilwalking)
 │           ├── items.ts          # Item definitions
 │           ├── npcs.ts           # NPC definitions
 │           ├── worldObjects.ts   # World object definitions
-│           └── towns/            # Town definitions (data-driven)
-│               ├── index.ts      # Town system, registry
+│           ├── expeditions.ts    # Veil expedition system
+│           ├── achievements.ts   # Achievement definitions
+│           ├── challenges.ts     # Daily challenge system
+│           └── towns/            # Town definitions
 │               └── thornwick.ts  # First town - Thornwick
 │
 ├── docker-compose.yml   # PostgreSQL for local dev
-├── eslint.config.mjs    # ESLint flat config
-├── .prettierrc          # Prettier config
-└── PLAN.md              # Development roadmap
+└── CLAUDE.md            # AI assistant instructions
 ```
+
+## Game Features
+
+### Core Systems
+- **Click-to-move pathfinding** (A* algorithm with height awareness)
+- **Real-time multiplayer** via Colyseus WebSocket sync
+- **3D terrain** with height levels, cliff faces, and water
+- **OSRS-style camera** (Q/E rotate, scroll zoom, arrow keys)
+- **Procedural characters** - joint-based with walk/idle animations
+
+### Skills (24 Total)
+| Category | Skills |
+|----------|--------|
+| Combat | Attack, Strength, Defence, Hitpoints, Ranged, Prayer, Magic |
+| Gathering | Mining, Fishing, Woodcutting, Farming, Hunter |
+| Production | Smithing, Cooking, Crafting, Fletching, Herblore, Runecrafting, Construction |
+| Support | Agility, Thieving, Slayer, Firemaking |
+| **Veil** | **Veilwalking** |
+
+### The Veil System
+
+Enter rifts scattered across the world to begin **Expeditions** into The Veil:
+
+- **Veil Stability** - Your lifeline in the dimension. Drains over time and when taking damage.
+- **Timed Expeditions** - Each tier has a maximum duration (10 min for Shallow Veil)
+- **Risk vs Reward** - Deeper expeditions offer better loot but faster stability drain
+- **Extraction** - Leave voluntarily to keep all loot, or get forced out and lose unsecured items
+- **Veilwalking XP** - Gain experience for time spent and depth reached
+
+**Expedition Tiers:**
+| Tier | Name | Level Req | Duration | Danger |
+|------|------|-----------|----------|--------|
+| 1 | Shallow Veil | 1 | 10 min | Low |
+| 2 | Deep Veil | 25 | 8 min | Medium |
+| 3 | Abyssal Veil | 50 | 6 min | High |
+| 4 | Void Depths | 75 | 5 min | Extreme |
+| 5 | The Unnamed Dark | 90 | 4 min | ??? |
+
+**Visual Transformation:**
+When entering The Veil, the world shifts:
+- Dark purple fog envelops the landscape
+- Glowing cyan/magenta particles float through the air
+- Post-processing effects create an otherworldly atmosphere
+
+### Combat
+- Full OSRS-style combat with Attack, Strength, Defence
+- Combat styles: Accurate, Aggressive, Defensive
+- NPCs with AI, aggro ranges, loot tables, respawning
+- Hit splats, health bars, death animations
+
+### Equipment
+- **7 slots**: Head, Body, Legs, Feet, Hands, Weapon, Offhand
+- **Visual gear**: Equipment visible on character models
+- **Tiers**: Bronze (Lv1), Iron (Lv10), Steel (Lv20)
+- **NPC drops**: Goblins drop bronze, Guards drop iron
+
+### Economy
+- **Inventory**: 28 slots
+- **Banking**: Secure storage
+- **Shops**: Buy/sell equipment and supplies
+- **Coins**: Universal currency
+
+### Engagement Systems
+- **Daily Challenges**: 3 rotating objectives with XP/coin rewards
+- **Achievements**: Milestone tracking with titles and badges
+- **XP Tracker**: Real-time XP/hour display
+
+### Towns
+**Thornwick** - The starting town (48x48 tiles)
+- Thornwick Keep (northern castle)
+- Bank, General Store, Blacksmith, The Rusty Sword Inn
+- Central marketplace with fountain and market stalls
+- Perimeter walls with guarded south gate
+- **Veil Rift** near the fountain - portal to expeditions
+- Fishing pond, trees, cooking facilities
 
 ## Available Scripts
 
 ```bash
 # Development
 pnpm dev              # Start client + server
-pnpm dev:client       # Start only client (localhost:5173)
-pnpm dev:server       # Start only server (ws://localhost:2567)
+pnpm dev:client       # Client only (localhost:5173)
+pnpm dev:server       # Server only (ws://localhost:2567)
 
-# Build
+# Build & Quality
 pnpm build            # Build all packages
-
-# Code Quality
-pnpm lint             # Run ESLint
-pnpm lint:fix         # Fix ESLint issues
-pnpm format           # Format with Prettier
-pnpm format:check     # Check formatting
-pnpm typecheck        # TypeScript type checking
+pnpm typecheck        # TypeScript checking
+pnpm lint             # ESLint
+pnpm format           # Prettier
 ```
 
-## Game Features (Current)
+## Architecture
 
-### Implemented
-- Click-to-move pathfinding (A* algorithm)
-- Multiplayer with real-time sync
-- 3D terrain with height levels and cliff faces
-- OSRS-style camera (Q/E to rotate, scroll to zoom)
-- 3 working skills: Woodcutting, Fishing, Cooking
-- 23 skill definitions (OSRS-style XP curve)
-- Full combat system (Attack, Strength, Defence, Hitpoints)
-- NPCs with combat AI, loot drops, respawning (passive and aggressive types)
-- **Equipment system** with 7 slots (head, body, legs, feet, hands, weapon, offhand)
-- **Visual equipment** on player models (weapons, shields, armor visible in 3D)
-- **Equipment drops** from NPCs (goblins drop bronze, guards drop iron)
-- **Procedural character system** - joint-based characters with walk/idle animations (no GLB models)
-- **Performance optimizations** - mesh instancing, freezeWorldMatrix for static objects
-- Skill panel UI with level/XP display
-- Inventory panel (28 slots) with equip option
-- Equipment panel with stat bonuses
-- Bank system
-- Shop system (weapons stall sells equipment)
-- Chat system
-- Player nameplates
-- World objects (trees, fishing spots, fire, bank booths, decorative props)
-- Database persistence (skills, inventory, equipment)
-- Loading screen
-- Auto-save every 30 seconds
+### State Synchronization
+- Initial data via WebSocket messages (`playerData`, `worldObjects`)
+- Real-time updates via Colyseus schema sync
+- Expedition state managed server-side with client callbacks
 
-### Equipment Tiers
-- **Bronze** (Level 1) - Starter gear, dropped by goblins
-- **Iron** (Level 10) - Mid-tier, dropped by guards
-- **Steel** (Level 20) - Advanced gear
+### World Generation
+- **Towns**: Data-driven, hand-designed areas
+- **Wilderness**: Procedural terrain with noise-based biomes
+- **Veil Rifts**: Entry points to expedition instances
 
-### Towns
-- **Thornwick** - First town, inspired by Varrock (48x48 tiles)
-  - Thornwick Keep (northern castle)
-  - Bank, General Store, Blacksmith, Inn
-  - Central marketplace with fountain and 4 colored market stalls
-  - Perimeter walls with south gate
-  - Guard NPCs (passive, drop iron), chickens, rats
-  - Goblins (aggressive, drop bronze)
-  - Torches, barrels, crates, benches, tables, flower patches
-  - Trees, fishing pond with willow, bank booth
-  - Cooking fire in inn, anvil at blacksmith
-
-### Coming Soon
-- HP regeneration and damage feedback (Phase 8.6)
-- Mining and Smithing skills (Phase 8.7)
-- Additional towns and zones (Phase 9)
-- Quest system (Phase 10)
-
-## Town System
-
-Towns are defined as data in `packages/shared/src/towns/`. Each town specifies:
-
-- **Bounds** - Rectangular area in world tile coordinates
-- **Buildings** - Walls, floors, doors
-- **NPCs** - Spawn points with patrol areas
-- **Objects** - Trees, bank booths, etc.
-- **Tile overrides** - Roads, paths, water features
-
-The `WorldGenerator` applies town data during chunk generation, creating structured areas within the procedurally generated wilderness.
-
-### Adding a New Town
-
-1. Create `packages/shared/src/towns/mytown.ts`
-2. Define `TownDefinition` with bounds, buildings, NPCs, objects
-3. Export and register the town in `towns/index.ts`
-4. The town will automatically appear in the world at the specified coordinates
+### Dimension System
+The game supports two visual modes:
+- **Surface**: Normal world with light fog, dust particles
+- **Veil**: Dark dimension with purple fog, glowing particles, post-processing
 
 ## Database
 
-PostgreSQL with Drizzle ORM. Tables:
-- `players` - Player accounts
+PostgreSQL with Drizzle ORM:
+- `players` - Account data
 - `player_skills` - XP per skill
 - `player_inventory` - Items
+- `player_bank` - Banked items
+- `player_equipment` - Equipped gear
+- `player_stats` - Lifetime statistics
+- `player_achievements` - Earned achievements
+- `player_daily_challenges` - Challenge progress
 
-Server runs without database if unavailable (non-persistent mode).
+Server runs in non-persistent mode if database unavailable.
 
-## Architecture Notes
+## Development Roadmap
 
-### State Sync
-Initial player data is sent via WebSocket messages (`playerData`, `worldObjects`) rather than Colyseus schema sync for reliability. Real-time updates (position, actions) use schema sync.
+### Completed
+- [x] Core movement and multiplayer
+- [x] Skill system (24 skills)
+- [x] Combat system
+- [x] Equipment with visual display
+- [x] Towns and procedural world
+- [x] Banking and shops
+- [x] Daily challenges and achievements
+- [x] **Veil expedition system**
+- [x] **Dimension visual transitions**
 
-### World Generation
-The world uses a hybrid approach:
-- **Towns**: Data-driven, hand-designed areas with buildings, NPCs, roads
-- **Wilderness**: Procedural terrain with noise-based biomes and random resource spawns
+### In Progress
+- [ ] Veil creatures and combat
+- [ ] Veil-specific loot and resources
+- [ ] Veil Anchors for securing loot mid-expedition
 
-### Skill Actions
-1. Click world object → pathfind to adjacent tile
-2. Send `startAction` message to server
-3. Server validates level requirements
-4. Timer completes → grant XP + item
-5. Auto-repeat until depleted or inventory full
-
-## Development
-
-### VS Code Setup
-The `.vscode/settings.json` enables:
-- Format on save (Prettier)
-- ESLint auto-fix on save
-
-### Adding a New Skill
-1. Add to `SkillType` enum in `shared/src/skills.ts`
-2. Add definition to `SKILL_DEFINITIONS`
-3. Add world object type in `shared/src/worldObjects.ts`
-4. Spawn objects in town definitions or procedural generation
-5. Create entity renderer in `client/src/entities/`
+### Planned
+- [ ] Additional towns and wilderness zones
+- [ ] Mining and Smithing skills
+- [ ] Quest system
+- [ ] Player trading
+- [ ] Guilds/clans
 
 ## License
 

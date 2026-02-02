@@ -10,7 +10,7 @@ import {
   Mesh,
   MeshBuilder,
   Vector3,
-  StandardMaterial
+  Material
 } from '@babylonjs/core'
 import { ItemType, EquipmentSlot } from '@realm/shared'
 import { SharedResources } from '../systems/SharedResources'
@@ -29,7 +29,7 @@ export interface EquipmentMeshConfig {
 /**
  * Get the material for a given item type based on its tier
  */
-function getMaterialForItem(itemType: ItemType): StandardMaterial {
+function getMaterialForItem(itemType: ItemType): Material {
   const res = SharedResources.get()
 
   if (itemType.startsWith('bronze_')) return res.bronzeEquipmentMaterial

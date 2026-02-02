@@ -30,7 +30,10 @@ export enum SkillType {
   AGILITY = 'agility',
   THIEVING = 'thieving',
   SLAYER = 'slayer',
-  FIREMAKING = 'firemaking'
+  FIREMAKING = 'firemaking',
+
+  // Veil
+  VEILWALKING = 'veilwalking'
 }
 
 export interface SkillDefinition {
@@ -209,6 +212,15 @@ export const SKILL_DEFINITIONS: Record<SkillType, SkillDefinition> = {
     description: 'Light fires',
     icon: '🔥',
     maxLevel: 99
+  },
+
+  // Veil
+  [SkillType.VEILWALKING]: {
+    type: SkillType.VEILWALKING,
+    name: 'Veilwalking',
+    description: 'Navigate the Veil dimension',
+    icon: '🌀',
+    maxLevel: 99
   }
 }
 
@@ -290,7 +302,8 @@ export const SKILL_CATEGORIES = {
     SkillType.RUNECRAFTING,
     SkillType.CONSTRUCTION
   ],
-  support: [SkillType.AGILITY, SkillType.THIEVING, SkillType.SLAYER, SkillType.FIREMAKING]
+  support: [SkillType.AGILITY, SkillType.THIEVING, SkillType.SLAYER, SkillType.FIREMAKING],
+  veil: [SkillType.VEILWALKING]
 }
 
 // Calculate total level

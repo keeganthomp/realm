@@ -37,7 +37,26 @@ import {
   getEquipmentSlot,
   isTwoHanded,
   getEquipmentRequirements,
-  calculateTotalBonuses
+  calculateTotalBonuses,
+  StatType,
+  AchievementType,
+  ACHIEVEMENT_DEFINITIONS,
+  getAchievementsForStat,
+  getSkillLevelAchievements,
+  checkStatAchievement,
+  checkSkillAchievement,
+  getDailyChallenges,
+  getTimeUntilReset,
+  getRiftById,
+  getActiveRifts,
+  calculateMaxStability,
+  calculateDrainRate,
+  getExpeditionTier,
+  Expedition,
+  VeilRift,
+  getVeilCreaturesForTier,
+  isVeilCreature,
+  getStabilityDrain
 } from '@realm/shared'
 import type { ChunkData, ChunkKey } from '@realm/shared'
 import { WorldGenerator } from '../world/WorldGenerator'
@@ -46,7 +65,16 @@ import {
   savePlayerSkills,
   savePlayerInventory,
   savePlayerBank,
-  savePlayerEquipment
+  savePlayerEquipment,
+  getPlayerStats,
+  incrementPlayerStat,
+  getPlayerAchievements,
+  grantAchievement,
+  getPlayerCosmetics,
+  setPlayerCosmetics,
+  initPlayerDailyChallenges,
+  updateChallengeProgress,
+  claimChallengeReward
 } from '../database'
 import { SpatialHashGrid } from '../spatial/SpatialHashGrid'
 
@@ -71,6 +99,20 @@ export class WorldRoom extends Room {
   private playerChunks: Map<string, Set<ChunkKey>> = new Map()
   private chunkObjectIds: Map<ChunkKey, Set<string>> = new Map()
   private objectToChunk: Map<string, ChunkKey> = new Map()
+
+  // Player stats cache (in-memory for performance, persisted to DB periodically)
+  private playerStats: Map<string, Map<StatType, number>> = new Map()
+  private playerAchievements: Map<string, Set<AchievementType>> = new Map()
+  private playerCosmetics: Map<string, { activeTitle: string | null; activeBadge: string | null }> = new Map()
+  // Daily challenge progress: sessionId -> Map<challengeIndex, {progress, completed, claimed}>
+  private playerChallengeProgress: Map<string, Map<number, { progress: number; completed: boolean; claimed: boolean }>> = new Map()
+
+  // Active expeditions: sessionId -> Expedition
+  private activeExpeditions: Map<string, Expedition> = new Map()
+  // Expedition stability drain intervals
+  private expeditionIntervals: Map<string, NodeJS.Timeout> = new Map()
+  // Veil NPCs spawned for each expedition: sessionId -> Set of NPC IDs
+  private expeditionNpcs: Map<string, Set<string>> = new Map()
 
   // Spatial hash grids for O(1) proximity queries (5 tiles per cell)
   private playerGrid: SpatialHashGrid<Player & { sessionId: string }> = new SpatialHashGrid(5 * TILE_SIZE)
@@ -188,6 +230,11 @@ export class WorldRoom extends Room {
       this.handleFlee(client)
     })
 
+    // Handle Veil expedition extraction
+    this.onMessage('extractExpedition', (client) => {
+      this.voluntaryExtractExpedition(client.sessionId)
+    })
+
     // Handle setting combat style
     this.onMessage('setCombatStyle', (client, data: { style: string }) => {
       const player = this.state.players.get(client.sessionId)
@@ -195,6 +242,21 @@ export class WorldRoom extends Room {
       if (['accurate', 'aggressive', 'defensive'].includes(data.style)) {
         player.combatStyle = data.style
       }
+    })
+
+    // Handle claiming daily challenge reward
+    this.onMessage('claimChallengeReward', (client, data: { challengeIndex: number }) => {
+      this.handleClaimChallengeReward(client, data.challengeIndex)
+    })
+
+    // Handle setting active title
+    this.onMessage('setActiveTitle', (client, data: { title: string | null }) => {
+      this.handleSetActiveTitle(client, data.title)
+    })
+
+    // Handle setting active badge
+    this.onMessage('setActiveBadge', (client, data: { badge: string | null }) => {
+      this.handleSetActiveBadge(client, data.badge)
     })
 
     // Handle equipping an item
@@ -318,11 +380,17 @@ export class WorldRoom extends Room {
     const player = this.state.players.get(client.sessionId)
     if (!player) return
 
+    console.log(`[Action] Player ${player.name} starting action on object: ${objectId}`)
+
     const worldObj = this.state.worldObjects.get(objectId)
     if (!worldObj) {
+      console.log(`[Action] Object not found: ${objectId}`)
+      console.log(`[Action] Available objects: ${Array.from(this.state.worldObjects.keys()).slice(0, 10).join(', ')}...`)
       client.send('actionError', { message: 'Object not found' })
       return
     }
+
+    console.log(`[Action] Found object type: ${worldObj.objectType}`)
 
     // Range check before any interaction
     if (!this.isPlayerInRangeOfObject(player, worldObj)) {
@@ -331,7 +399,12 @@ export class WorldRoom extends Room {
     }
 
     const objDef = WORLD_OBJECT_DEFINITIONS[worldObj.objectType as WorldObjectType]
-    if (!objDef) return
+    if (!objDef) {
+      console.log(`[Action] No definition for object type: ${worldObj.objectType}`)
+      return
+    }
+
+    console.log(`[Action] Action category: ${objDef.actionCategory}`)
 
     // Route by action category
     switch (objDef.actionCategory) {
@@ -356,6 +429,11 @@ export class WorldRoom extends Room {
 
       case ActionCategory.NONE:
         // No interaction for purely decorative objects
+        return
+
+      case ActionCategory.VEIL:
+        // Veil rift - enter expedition
+        this.handleEnterRift(client, objectId)
         return
 
       case ActionCategory.SKILL:
@@ -624,11 +702,23 @@ export class WorldRoom extends Room {
           skill,
           newLevel
         })
+        // Check for skill level achievements
+        this.checkSkillLevelAchievements(sessionId, newLevel)
       }
     }
 
     // Grant item (with stacking support)
     this.addItemToInventory(player, yields, 1)
+
+    // Track stats for achievements and challenges
+    if (skill === SkillType.WOODCUTTING) {
+      this.trackStat(sessionId, StatType.LOGS_CHOPPED)
+    } else if (skill === SkillType.FISHING) {
+      this.trackStat(sessionId, StatType.FISH_CAUGHT)
+      if (yields === ItemType.RAW_SHRIMP) {
+        this.trackStat(sessionId, StatType.SHRIMP_CAUGHT)
+      }
+    }
 
     // Mark player as having unsaved changes
     this.pendingSaves.add(sessionId)
@@ -994,7 +1084,14 @@ export class WorldRoom extends Room {
           skill: SkillType.COOKING,
           newLevel
         })
+        // Check for skill level achievements
+        this.checkSkillLevelAchievements(sessionId, newLevel)
       }
+    }
+
+    // Track cooking stat (only for successful cooks)
+    if (!burned) {
+      this.trackStat(sessionId, StatType.FOOD_COOKED)
     }
 
     // Mark for save
@@ -1332,6 +1429,8 @@ export class WorldRoom extends Room {
               skill: xpResult.skill,
               newLevel
             })
+            // Check for skill level achievements
+            this.checkSkillLevelAchievements(sessionId, newLevel)
           }
         }
 
@@ -1351,10 +1450,17 @@ export class WorldRoom extends Room {
               skill: SkillType.HITPOINTS,
               newLevel
             })
+            // Check for skill level achievements
+            this.checkSkillLevelAchievements(sessionId, newLevel)
           }
         }
 
         this.pendingSaves.add(sessionId)
+      }
+
+      // Track damage dealt for achievements/challenges
+      if (damage > 0) {
+        this.trackStat(sessionId, StatType.DAMAGE_DEALT, damage)
       }
 
       // Notify clients of hit
@@ -1443,6 +1549,12 @@ export class WorldRoom extends Room {
         targetMaxHp: player.maxHp
       })
 
+      // Apply stability damage if hit by Veil creature during expedition
+      if (damage > 0 && isVeilCreature(npc.npcType as NpcType)) {
+        const stabilityDrain = getStabilityDrain(npc.npcType as NpcType)
+        this.applyExpeditionDamageStabilityLoss(npc.targetId, damage, stabilityDrain)
+      }
+
       // Check if player died
       if (player.currentHp <= 0) {
         this.handlePlayerDeath(npc.targetId)
@@ -1505,9 +1617,21 @@ export class WorldRoom extends Room {
     if (player) {
       for (const drop of drops) {
         this.addItemToInventory(player, drop.item, drop.quantity)
+        // Track coins earned for achievement
+        if (drop.item === ItemType.COINS) {
+          this.trackStat(killerSessionId, StatType.COINS_EARNED, drop.quantity)
+        }
       }
       this.pendingSaves.add(killerSessionId)
       this.sendStateUpdate(killerSessionId)
+    }
+
+    // Track kill stats
+    this.trackStat(killerSessionId, StatType.TOTAL_KILLS)
+    if (npc.npcType === NpcType.CHICKEN) {
+      this.trackStat(killerSessionId, StatType.CHICKENS_KILLED)
+    } else if (npc.npcType === NpcType.GOBLIN) {
+      this.trackStat(killerSessionId, StatType.GOBLINS_KILLED)
     }
 
     // Clear player's combat target
@@ -2043,9 +2167,69 @@ export class WorldRoom extends Room {
         this.sendEquipmentUpdate(sessionId)
 
         console.log('Sent playerData message to client for:', username)
+
+        // Load stats, achievements, and daily challenges
+        await this.loadEngagementData(sessionId, playerData.id, client)
       }
     } catch (error) {
       console.warn('Database unavailable, using defaults:', (error as Error).message)
+    }
+  }
+
+  private async loadEngagementData(sessionId: string, playerId: number, client: Client) {
+    try {
+      // Load player stats
+      const stats = await getPlayerStats(playerId)
+      const statsMap = new Map<StatType, number>()
+      for (const [statType, value] of Object.entries(stats)) {
+        statsMap.set(statType as StatType, value)
+      }
+      this.playerStats.set(sessionId, statsMap)
+
+      // Load achievements
+      const achievementsList = await getPlayerAchievements(playerId)
+      this.playerAchievements.set(sessionId, new Set(achievementsList))
+
+      // Load cosmetics
+      const cosmetics = await getPlayerCosmetics(playerId)
+      this.playerCosmetics.set(sessionId, cosmetics)
+
+      // Send achievements data to client
+      client.send('achievementsData', {
+        achievements: achievementsList,
+        stats,
+        cosmetics
+      })
+
+      // Load daily challenges
+      const today = new Date().toISOString().split('T')[0]
+      const challengeProgress = await initPlayerDailyChallenges(playerId, today, 3)
+      const progressMap = new Map<number, { progress: number; completed: boolean; claimed: boolean }>()
+      for (const challenge of challengeProgress) {
+        progressMap.set(challenge.challengeIndex, {
+          progress: challenge.progress,
+          completed: challenge.completed,
+          claimed: challenge.claimed
+        })
+      }
+      this.playerChallengeProgress.set(sessionId, progressMap)
+
+      // Get today's challenge definitions
+      const todaysChallenges = getDailyChallenges(new Date())
+
+      // Send daily challenges to client
+      client.send('dailyChallenges', {
+        date: today,
+        challenges: todaysChallenges.map((def, index) => ({
+          definition: def,
+          progress: progressMap.get(index)?.progress || 0,
+          completed: progressMap.get(index)?.completed || false,
+          claimed: progressMap.get(index)?.claimed || false
+        })),
+        timeUntilReset: getTimeUntilReset()
+      })
+    } catch (error) {
+      console.warn('Failed to load engagement data:', (error as Error).message)
     }
   }
 
@@ -2066,6 +2250,10 @@ export class WorldRoom extends Room {
     this.pendingSaves.delete(client.sessionId)
     this.playerDbIds.delete(client.sessionId)
     this.playerBanks.delete(client.sessionId)
+    this.playerStats.delete(client.sessionId)
+    this.playerAchievements.delete(client.sessionId)
+    this.playerCosmetics.delete(client.sessionId)
+    this.playerChallengeProgress.delete(client.sessionId)
     const chunks = this.playerChunks.get(client.sessionId)
     if (chunks) {
       for (const key of chunks) {
@@ -2099,5 +2287,663 @@ export class WorldRoom extends Room {
     }
 
     console.log('WorldRoom disposed')
+  }
+
+  // ===== Engagement Features =====
+
+  private async handleClaimChallengeReward(client: Client, challengeIndex: number) {
+    const playerId = this.playerDbIds.get(client.sessionId)
+    if (!playerId) return
+
+    const progressMap = this.playerChallengeProgress.get(client.sessionId)
+    if (!progressMap) return
+
+    const progress = progressMap.get(challengeIndex)
+    if (!progress || !progress.completed || progress.claimed) {
+      client.send('actionError', { message: 'Cannot claim this reward' })
+      return
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+    const claimed = await claimChallengeReward(playerId, today, challengeIndex)
+    if (!claimed) {
+      client.send('actionError', { message: 'Failed to claim reward' })
+      return
+    }
+
+    // Mark as claimed in memory
+    progress.claimed = true
+
+    // Get challenge definition and grant reward
+    const todaysChallenges = getDailyChallenges(new Date())
+    const challengeDef = todaysChallenges[challengeIndex]
+    if (!challengeDef) return
+
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+
+    // Grant XP or coins
+    if (challengeDef.rewardXp && challengeDef.rewardSkill) {
+      const skillData = player.skills.get(challengeDef.rewardSkill)
+      if (skillData) {
+        const oldLevel = getLevelFromXp(skillData.xp)
+        skillData.xp += challengeDef.rewardXp
+        const newLevel = getLevelFromXp(skillData.xp)
+
+        if (newLevel > oldLevel) {
+          this.broadcast('levelUp', {
+            playerName: player.name,
+            skill: challengeDef.rewardSkill,
+            newLevel
+          })
+        }
+      }
+      this.pendingSaves.add(client.sessionId)
+    }
+
+    if (challengeDef.rewardCoins) {
+      this.addItemToInventory(player, ItemType.COINS, challengeDef.rewardCoins)
+      this.pendingSaves.add(client.sessionId)
+    }
+
+    // Send confirmation
+    client.send('challengeRewardClaimed', {
+      challengeIndex,
+      rewardXp: challengeDef.rewardXp,
+      rewardSkill: challengeDef.rewardSkill,
+      rewardCoins: challengeDef.rewardCoins
+    })
+
+    // Send state update
+    this.sendStateUpdate(client.sessionId)
+  }
+
+  private async handleSetActiveTitle(client: Client, title: string | null) {
+    const playerId = this.playerDbIds.get(client.sessionId)
+    if (!playerId) return
+
+    // Validate title is one the player has earned
+    if (title) {
+      const achievements = this.playerAchievements.get(client.sessionId)
+      const validTitle = [...(achievements || [])].some((achievementType) => {
+        const def = ACHIEVEMENT_DEFINITIONS[achievementType]
+        return def?.title === title
+      })
+      if (!validTitle) {
+        client.send('actionError', { message: 'You have not earned this title' })
+        return
+      }
+    }
+
+    // Update in memory
+    const cosmetics = this.playerCosmetics.get(client.sessionId) || { activeTitle: null, activeBadge: null }
+    cosmetics.activeTitle = title
+    this.playerCosmetics.set(client.sessionId, cosmetics)
+
+    // Update in database
+    await setPlayerCosmetics(playerId, { activeTitle: title })
+
+    // Send confirmation
+    client.send('cosmeticsUpdated', cosmetics)
+  }
+
+  private async handleSetActiveBadge(client: Client, badge: string | null) {
+    const playerId = this.playerDbIds.get(client.sessionId)
+    if (!playerId) return
+
+    // Validate badge is one the player has earned
+    if (badge) {
+      const achievements = this.playerAchievements.get(client.sessionId)
+      const validBadge = [...(achievements || [])].some((achievementType) => {
+        const def = ACHIEVEMENT_DEFINITIONS[achievementType]
+        return def?.chatBadge === badge
+      })
+      if (!validBadge) {
+        client.send('actionError', { message: 'You have not earned this badge' })
+        return
+      }
+    }
+
+    // Update in memory
+    const cosmetics = this.playerCosmetics.get(client.sessionId) || { activeTitle: null, activeBadge: null }
+    cosmetics.activeBadge = badge
+    this.playerCosmetics.set(client.sessionId, cosmetics)
+
+    // Update in database
+    await setPlayerCosmetics(playerId, { activeBadge: badge })
+
+    // Send confirmation
+    client.send('cosmeticsUpdated', cosmetics)
+  }
+
+  private async trackStat(sessionId: string, statType: StatType, amount: number = 1) {
+    const playerId = this.playerDbIds.get(sessionId)
+    if (!playerId) return
+
+    // Update in memory
+    const statsMap = this.playerStats.get(sessionId) || new Map<StatType, number>()
+    const currentValue = statsMap.get(statType) || 0
+    const newValue = currentValue + amount
+    statsMap.set(statType, newValue)
+    this.playerStats.set(sessionId, statsMap)
+
+    // Update in database
+    await incrementPlayerStat(playerId, statType, amount)
+
+    // Check for stat-based achievements
+    await this.checkStatAchievements(sessionId, statType, newValue)
+
+    // Check for challenge progress
+    await this.updateChallengeProgressForStat(sessionId, statType, newValue)
+  }
+
+  private async checkStatAchievements(sessionId: string, statType: StatType, newValue: number) {
+    const playerId = this.playerDbIds.get(sessionId)
+    if (!playerId) return
+
+    const achievementsToCheck = getAchievementsForStat(statType)
+    const earnedSet = this.playerAchievements.get(sessionId) || new Set<AchievementType>()
+
+    for (const achievementType of achievementsToCheck) {
+      if (earnedSet.has(achievementType)) continue
+
+      if (checkStatAchievement(achievementType, newValue)) {
+        const granted = await grantAchievement(playerId, achievementType)
+        if (granted) {
+          earnedSet.add(achievementType)
+          this.playerAchievements.set(sessionId, earnedSet)
+
+          // Notify client
+          const client = this.clients.find((c) => c.sessionId === sessionId)
+          client?.send('achievementUnlocked', { achievementType })
+
+          // Broadcast achievement
+          const player = this.state.players.get(sessionId)
+          const def = ACHIEVEMENT_DEFINITIONS[achievementType]
+          if (player && def) {
+            this.broadcast('chat', {
+              sender: 'System',
+              text: `${player.name} earned achievement: ${def.name}!`
+            })
+          }
+        }
+      }
+    }
+  }
+
+  private async checkSkillLevelAchievements(sessionId: string, level: number) {
+    const playerId = this.playerDbIds.get(sessionId)
+    if (!playerId) return
+
+    const achievementsToCheck = getSkillLevelAchievements()
+    const earnedSet = this.playerAchievements.get(sessionId) || new Set<AchievementType>()
+
+    for (const achievementType of achievementsToCheck) {
+      if (earnedSet.has(achievementType)) continue
+
+      if (checkSkillAchievement(achievementType, level)) {
+        const granted = await grantAchievement(playerId, achievementType)
+        if (granted) {
+          earnedSet.add(achievementType)
+          this.playerAchievements.set(sessionId, earnedSet)
+
+          // Notify client
+          const client = this.clients.find((c) => c.sessionId === sessionId)
+          client?.send('achievementUnlocked', { achievementType })
+
+          // Broadcast achievement
+          const player = this.state.players.get(sessionId)
+          const def = ACHIEVEMENT_DEFINITIONS[achievementType]
+          if (player && def) {
+            this.broadcast('chat', {
+              sender: 'System',
+              text: `${player.name} earned achievement: ${def.name}!`
+            })
+          }
+        }
+      }
+    }
+  }
+
+  private async updateChallengeProgressForStat(sessionId: string, statType: StatType, _totalValue: number) {
+    const playerId = this.playerDbIds.get(sessionId)
+    if (!playerId) return
+
+    const progressMap = this.playerChallengeProgress.get(sessionId)
+    if (!progressMap) return
+
+    const today = new Date().toISOString().split('T')[0]
+    const todaysChallenges = getDailyChallenges(new Date())
+
+    for (let i = 0; i < todaysChallenges.length; i++) {
+      const challenge = todaysChallenges[i]
+      if (challenge.statType !== statType) continue
+
+      const progress = progressMap.get(i)
+      if (!progress || progress.completed) continue
+
+      // Get session-specific progress (we track total stat, but challenges are per-day)
+      // For simplicity, we'll track challenge progress separately
+      const newProgress = Math.min(progress.progress + 1, challenge.targetCount)
+      const completed = newProgress >= challenge.targetCount
+
+      progress.progress = newProgress
+      progress.completed = completed
+
+      // Update in database
+      await updateChallengeProgress(playerId, today, i, newProgress, completed)
+
+      // Notify client
+      const client = this.clients.find((c) => c.sessionId === sessionId)
+      client?.send('challengeProgress', {
+        challengeIndex: i,
+        progress: newProgress,
+        completed
+      })
+    }
+  }
+
+  // ========================================
+  // Helper: Grant XP to a skill
+  // ========================================
+
+  private grantXp(sessionId: string, skill: SkillType, xpAmount: number) {
+    const player = this.state.players.get(sessionId)
+    if (!player) return
+
+    const skillData = player.skills.get(skill)
+    if (!skillData) return
+
+    const oldLevel = getLevelFromXp(skillData.xp)
+    skillData.xp += Math.floor(xpAmount)
+    const newLevel = getLevelFromXp(skillData.xp)
+
+    // Level up notification
+    if (newLevel > oldLevel) {
+      this.broadcast('levelUp', {
+        playerName: player.name,
+        skill,
+        level: newLevel
+      })
+
+      // Update max HP if hitpoints
+      if (skill === SkillType.HITPOINTS) {
+        player.maxHp = calculateMaxHp(newLevel)
+      }
+
+      // Check for skill-based achievements
+      this.checkSkillLevelAchievements(sessionId, newLevel)
+    }
+
+    this.pendingSaves.add(sessionId)
+  }
+
+  // ========================================
+  // Veil Expedition System
+  // ========================================
+
+  private handleEnterRift(client: Client, objectId: string) {
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+
+    // Check if already in expedition
+    if (this.activeExpeditions.has(client.sessionId)) {
+      client.send('chat', {
+        sender: 'System',
+        text: 'You are already on an expedition!'
+      })
+      return
+    }
+
+    // Find the rift by object ID
+    const worldObject = this.state.worldObjects.get(objectId)
+    if (!worldObject || worldObject.objectType !== WorldObjectType.VEIL_RIFT) {
+      client.send('chat', {
+        sender: 'System',
+        text: 'That rift has closed...'
+      })
+      return
+    }
+
+    // Get rift data by matching position (object IDs don't match rift IDs directly)
+    const objTile = worldToTile({ x: worldObject.x, y: worldObject.y })
+    const allRifts = getActiveRifts()
+    const rift = allRifts.find(r => r.position.tileX === objTile.tileX && r.position.tileY === objTile.tileY)
+
+    if (!rift) {
+      console.log(`[Expedition] No rift found at tile ${objTile.tileX}, ${objTile.tileY}`)
+      client.send('chat', {
+        sender: 'System',
+        text: 'This rift is unstable...'
+      })
+      return
+    }
+
+    console.log(`[Expedition] Found rift: ${rift.name} (tier ${rift.destinationTier})`)
+
+    // Get player's Veilwalking level
+    const veilwalkingXp = player.skills.get(SkillType.VEILWALKING)?.xp ?? 0
+    const veilwalkingLevel = getLevelFromXp(veilwalkingXp)
+
+    // Check level requirement (use rift data or defaults)
+    const stabilityRequired = rift?.stabilityRequired ?? 1
+    if (veilwalkingLevel < stabilityRequired) {
+      client.send('chat', {
+        sender: 'System',
+        text: `You need level ${stabilityRequired} Veilwalking to enter this rift. (Current: ${veilwalkingLevel})`
+      })
+      return
+    }
+
+    // Get tier info
+    const tier = rift?.destinationTier ?? 1
+    const tierInfo = getExpeditionTier(tier)
+    if (!tierInfo) {
+      client.send('chat', {
+        sender: 'System',
+        text: 'The rift leads nowhere...'
+      })
+      return
+    }
+
+    // Create expedition
+    const maxStability = calculateMaxStability(veilwalkingLevel)
+    const drainRate = calculateDrainRate(tier, 0) // depth 0 initially
+
+    const expedition: Expedition = {
+      id: `exp_${client.sessionId}_${Date.now()}`,
+      playerId: client.sessionId,
+      riftId: objectId,
+      startTime: Date.now(),
+      maxDuration: tierInfo.baseDuration,
+
+      maxStability,
+      currentStability: maxStability,
+      stabilityDrainRate: drainRate,
+
+      currentDepth: 0,
+      creaturesKilled: 0,
+      resourcesGathered: 0,
+
+      securedLoot: [],
+      unsecuredLoot: [],
+
+      status: 'active'
+    }
+
+    this.activeExpeditions.set(client.sessionId, expedition)
+
+    // Start stability drain interval (every second)
+    const drainInterval = setInterval(() => {
+      this.tickExpeditionStability(client.sessionId)
+    }, 1000)
+    this.expeditionIntervals.set(client.sessionId, drainInterval)
+
+    // Spawn Veil creatures near the player
+    this.spawnVeilCreatures(client.sessionId, player, tier)
+
+    // Notify client of expedition start
+    client.send('expeditionStart', {
+      expedition: {
+        id: expedition.id,
+        riftId: expedition.riftId,
+        tier,
+        tierName: tierInfo.name,
+        maxDuration: expedition.maxDuration,
+        maxStability: expedition.maxStability,
+        currentStability: expedition.currentStability,
+        stabilityDrainRate: expedition.stabilityDrainRate
+      }
+    })
+
+    // Broadcast to room
+    this.broadcast('chat', {
+      sender: 'System',
+      text: `${player.name} has entered the ${tierInfo.name}...`
+    })
+
+    console.log(`[Expedition] ${player.name} entered ${tierInfo.name} (Tier ${tier})`)
+  }
+
+  private tickExpeditionStability(sessionId: string) {
+    const expedition = this.activeExpeditions.get(sessionId)
+    if (!expedition || expedition.status !== 'active') return
+
+    // Drain stability
+    expedition.currentStability -= expedition.stabilityDrainRate
+
+    // Check time limit
+    const elapsed = Date.now() - expedition.startTime
+    if (elapsed >= expedition.maxDuration) {
+      this.forceExtractExpedition(sessionId, 'time_expired')
+      return
+    }
+
+    // Check stability depletion
+    if (expedition.currentStability <= 0) {
+      expedition.currentStability = 0
+      this.forceExtractExpedition(sessionId, 'stability_depleted')
+      return
+    }
+
+    // Send stability update to client
+    const client = this.clients.find(c => c.sessionId === sessionId)
+    client?.send('expeditionUpdate', {
+      currentStability: expedition.currentStability,
+      timeRemaining: expedition.maxDuration - elapsed
+    })
+  }
+
+  private forceExtractExpedition(sessionId: string, reason: 'time_expired' | 'stability_depleted' | 'death') {
+    const expedition = this.activeExpeditions.get(sessionId)
+    if (!expedition) return
+
+    expedition.status = 'failed'
+    expedition.exitReason = reason
+
+    // Clear drain interval
+    const interval = this.expeditionIntervals.get(sessionId)
+    if (interval) {
+      clearInterval(interval)
+      this.expeditionIntervals.delete(sessionId)
+    }
+
+    // Clean up Veil creatures
+    this.cleanupExpeditionNpcs(sessionId)
+
+    const player = this.state.players.get(sessionId)
+    const client = this.clients.find(c => c.sessionId === sessionId)
+
+    // Lose unsecured loot on forced extraction
+    const lostItems = expedition.unsecuredLoot.length
+
+    // Grant only secured loot
+    if (player) {
+      for (const loot of expedition.securedLoot) {
+        this.addItemToInventory(player, loot.itemType as ItemType, loot.quantity)
+      }
+    }
+
+    // Grant Veilwalking XP based on time spent (minimum 10 XP for attempting)
+    const timeSpentMinutes = (Date.now() - expedition.startTime) / 60000
+    const veilwalkingXp = Math.max(10, Math.floor(timeSpentMinutes * 10 + expedition.currentDepth * 50))
+    this.grantXp(sessionId, SkillType.VEILWALKING, veilwalkingXp)
+
+    // Notify client
+    client?.send('expeditionEnd', {
+      reason,
+      securedLoot: expedition.securedLoot,
+      lostItems,
+      veilwalkingXp,
+      creaturesKilled: expedition.creaturesKilled,
+      resourcesGathered: expedition.resourcesGathered,
+      depthReached: expedition.currentDepth
+    })
+
+    // Broadcast
+    const reasonText = reason === 'time_expired' ? 'ran out of time' :
+                       reason === 'stability_depleted' ? 'lost their stability' : 'was overwhelmed'
+    if (player) {
+      this.broadcast('chat', {
+        sender: 'System',
+        text: `${player.name} ${reasonText} in the Veil and was forced to extract!`
+      })
+    }
+
+    this.activeExpeditions.delete(sessionId)
+    console.log(`[Expedition] ${player?.name} force-extracted: ${reason}`)
+  }
+
+  private voluntaryExtractExpedition(sessionId: string) {
+    const expedition = this.activeExpeditions.get(sessionId)
+    if (!expedition || expedition.status !== 'active') return
+
+    expedition.status = 'completed'
+    expedition.exitReason = 'voluntary'
+
+    // Clear drain interval
+    const interval = this.expeditionIntervals.get(sessionId)
+    if (interval) {
+      clearInterval(interval)
+      this.expeditionIntervals.delete(sessionId)
+    }
+
+    // Clean up Veil creatures
+    this.cleanupExpeditionNpcs(sessionId)
+
+    const player = this.state.players.get(sessionId)
+    const client = this.clients.find(c => c.sessionId === sessionId)
+
+    // Grant all loot (secured + unsecured)
+    if (player) {
+      const allLoot = [...expedition.securedLoot, ...expedition.unsecuredLoot]
+      for (const loot of allLoot) {
+        this.addItemToInventory(player, loot.itemType as ItemType, loot.quantity)
+      }
+    }
+
+    // Grant Veilwalking XP with completion bonus
+    const timeSpentMinutes = (Date.now() - expedition.startTime) / 60000
+    const timeXp = Math.floor(timeSpentMinutes * 10)
+    const depthXp = expedition.currentDepth * 50
+    const baseXp = timeXp + depthXp
+    const completionBonus = Math.max(25, Math.floor(baseXp * 0.25)) // Minimum 25 XP for completing
+    const veilwalkingXp = baseXp + completionBonus
+    this.grantXp(sessionId, SkillType.VEILWALKING, veilwalkingXp)
+
+    // Notify client
+    client?.send('expeditionEnd', {
+      reason: 'voluntary',
+      securedLoot: expedition.securedLoot,
+      unsecuredLoot: expedition.unsecuredLoot,
+      lostItems: 0,
+      veilwalkingXp,
+      creaturesKilled: expedition.creaturesKilled,
+      resourcesGathered: expedition.resourcesGathered,
+      depthReached: expedition.currentDepth,
+      completionBonus
+    })
+
+    // Broadcast success
+    if (player) {
+      this.broadcast('chat', {
+        sender: 'System',
+        text: `${player.name} successfully extracted from the Veil!`
+      })
+    }
+
+    this.activeExpeditions.delete(sessionId)
+    console.log(`[Expedition] ${player?.name} voluntary extraction successful`)
+  }
+
+  // Called when player takes damage in the Veil
+  private applyExpeditionDamageStabilityLoss(sessionId: string, damage: number, creatureStabilityDrain: number = 5) {
+    const expedition = this.activeExpeditions.get(sessionId)
+    if (!expedition || expedition.status !== 'active') return
+
+    // Stability loss from taking damage
+    const stabilityLoss = creatureStabilityDrain + Math.floor(damage * 0.5)
+    expedition.currentStability = Math.max(0, expedition.currentStability - stabilityLoss)
+
+    const client = this.clients.find(c => c.sessionId === sessionId)
+    client?.send('stabilityDamage', {
+      stabilityLost: stabilityLoss,
+      currentStability: expedition.currentStability
+    })
+
+    if (expedition.currentStability <= 0) {
+      this.forceExtractExpedition(sessionId, 'stability_depleted')
+    }
+  }
+
+  // Get expedition for a player (for other systems to check)
+  getActiveExpedition(sessionId: string): Expedition | undefined {
+    return this.activeExpeditions.get(sessionId)
+  }
+
+  // Spawn Veil creatures around a player for their expedition
+  private spawnVeilCreatures(sessionId: string, player: Player, tier: number) {
+    const veilCreatureTypes = getVeilCreaturesForTier(tier)
+    if (veilCreatureTypes.length === 0) return
+
+    const spawnedIds = new Set<string>()
+    const playerTile = worldToTile({ x: player.x, y: player.y })
+
+    // Spawn 3-5 creatures around the player
+    const creatureCount = 3 + Math.floor(Math.random() * 3)
+
+    for (let i = 0; i < creatureCount; i++) {
+      // Pick a random creature type for this tier
+      const creatureType = veilCreatureTypes[Math.floor(Math.random() * veilCreatureTypes.length)]
+      const def = NPC_DEFINITIONS[creatureType]
+      if (!def) continue
+
+      // Spawn 3-6 tiles away from player in random direction
+      const distance = 3 + Math.floor(Math.random() * 4)
+      const angle = Math.random() * Math.PI * 2
+      const spawnTileX = playerTile.tileX + Math.round(Math.cos(angle) * distance)
+      const spawnTileY = playerTile.tileY + Math.round(Math.sin(angle) * distance)
+      const spawnPos = tileToWorld({ tileX: spawnTileX, tileY: spawnTileY })
+
+      // Create NPC
+      const npcId = `veil_${sessionId}_${creatureType}_${i}_${Date.now()}`
+      const npc = new NPC()
+      npc.id = npcId
+      npc.npcType = creatureType
+      npc.x = spawnPos.x
+      npc.y = spawnPos.y
+      npc.spawnX = spawnPos.x
+      npc.spawnY = spawnPos.y
+      npc.currentHp = def.hitpoints
+      npc.maxHp = def.hitpoints
+      npc.isDead = false
+      npc.targetId = ''
+      npc.lastAttackTime = 0
+
+      this.state.npcs.set(npcId, npc)
+      this.npcGrid.insert(npc)
+      spawnedIds.add(npcId)
+
+      console.log(`[Expedition] Spawned ${def.name} at (${spawnTileX}, ${spawnTileY}) for ${sessionId}`)
+    }
+
+    this.expeditionNpcs.set(sessionId, spawnedIds)
+  }
+
+  // Clean up Veil creatures when expedition ends
+  private cleanupExpeditionNpcs(sessionId: string) {
+    const npcIds = this.expeditionNpcs.get(sessionId)
+    if (!npcIds) return
+
+    for (const npcId of npcIds) {
+      const npc = this.state.npcs.get(npcId)
+      if (npc) {
+        this.npcGrid.remove(npc)
+        this.state.npcs.delete(npcId)
+      }
+    }
+
+    this.expeditionNpcs.delete(sessionId)
+    console.log(`[Expedition] Cleaned up ${npcIds.size} Veil creatures for ${sessionId}`)
   }
 }

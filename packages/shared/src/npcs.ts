@@ -7,7 +7,16 @@ export enum NpcType {
   COW = 'cow',
   GOBLIN = 'goblin',
   GIANT_RAT = 'giant_rat',
-  GUARD = 'guard'
+  GUARD = 'guard',
+
+  // Town NPCs
+  VEIL_SCHOLAR = 'veil_scholar',
+
+  // Veil creatures
+  SHADE = 'shade',
+  VOID_CRAWLER = 'void_crawler',
+  SHADOW_BEAST = 'shadow_beast',
+  VEIL_WRAITH = 'veil_wraith'
 }
 
 export interface LootTableEntry {
@@ -30,6 +39,11 @@ export interface NpcDefinition {
   aggroRange: number // 0 = not aggressive
   respawnTime: number // milliseconds
   drops: LootTableEntry[]
+
+  // Veil creature properties
+  isVeilCreature?: boolean
+  stabilityDrain?: number // Extra stability damage per hit
+  veilTier?: number // Minimum expedition tier to spawn
 }
 
 export const NPC_DEFINITIONS: Record<NpcType, NpcDefinition> = {
@@ -135,7 +149,151 @@ export const NPC_DEFINITIONS: Record<NpcType, NpcDefinition> = {
       { item: ItemType.IRON_LEGS, minQuantity: 1, maxQuantity: 1, weight: 2 },
       { item: ItemType.IRON_CHESTPLATE, minQuantity: 1, maxQuantity: 1, weight: 1 }
     ]
+  },
+
+  // ========================================
+  // TOWN NPCs
+  // ========================================
+
+  [NpcType.VEIL_SCHOLAR]: {
+    type: NpcType.VEIL_SCHOLAR,
+    name: 'Veil Scholar',
+    combatLevel: 15,
+    hitpoints: 30,
+    maxHit: 3,
+    attackLevel: 10,
+    strengthLevel: 10,
+    defenceLevel: 15,
+    attackSpeed: 4,
+    aggroRange: 0, // Passive - scholars don't fight
+    respawnTime: 120000,
+    drops: [
+      { item: ItemType.BONES, minQuantity: 1, maxQuantity: 1, weight: 100 },
+      { item: ItemType.COINS, minQuantity: 20, maxQuantity: 50, weight: 50 },
+      // Scholars may carry veil materials from their research
+      { item: ItemType.ETHEREAL_DUST, minQuantity: 1, maxQuantity: 2, weight: 15 },
+      { item: ItemType.VEIL_ESSENCE, minQuantity: 1, maxQuantity: 1, weight: 5 }
+    ]
+  },
+
+  // ========================================
+  // VEIL CREATURES
+  // ========================================
+
+  [NpcType.SHADE]: {
+    type: NpcType.SHADE,
+    name: 'Shade',
+    combatLevel: 8,
+    hitpoints: 12,
+    maxHit: 3,
+    attackLevel: 8,
+    strengthLevel: 6,
+    defenceLevel: 5,
+    attackSpeed: 4,
+    aggroRange: 4,
+    respawnTime: 0, // Don't respawn - expedition only
+    drops: [
+      { item: ItemType.VEIL_BONES, minQuantity: 1, maxQuantity: 1, weight: 100 },
+      { item: ItemType.ETHEREAL_DUST, minQuantity: 1, maxQuantity: 3, weight: 60 },
+      { item: ItemType.VEIL_ESSENCE, minQuantity: 1, maxQuantity: 1, weight: 25 },
+      { item: ItemType.COINS, minQuantity: 10, maxQuantity: 30, weight: 50 }
+    ],
+    isVeilCreature: true,
+    stabilityDrain: 3,
+    veilTier: 1
+  },
+
+  [NpcType.VOID_CRAWLER]: {
+    type: NpcType.VOID_CRAWLER,
+    name: 'Void Crawler',
+    combatLevel: 15,
+    hitpoints: 20,
+    maxHit: 5,
+    attackLevel: 14,
+    strengthLevel: 12,
+    defenceLevel: 10,
+    attackSpeed: 3, // Faster attacks
+    aggroRange: 5,
+    respawnTime: 0,
+    drops: [
+      { item: ItemType.VEIL_BONES, minQuantity: 1, maxQuantity: 1, weight: 100 },
+      { item: ItemType.CORRUPTED_HIDE, minQuantity: 1, maxQuantity: 1, weight: 40 },
+      { item: ItemType.SHADOW_FRAGMENT, minQuantity: 1, maxQuantity: 2, weight: 35 },
+      { item: ItemType.VEIL_ESSENCE, minQuantity: 1, maxQuantity: 2, weight: 45 },
+      { item: ItemType.COINS, minQuantity: 20, maxQuantity: 60, weight: 60 }
+    ],
+    isVeilCreature: true,
+    stabilityDrain: 5,
+    veilTier: 1
+  },
+
+  [NpcType.SHADOW_BEAST]: {
+    type: NpcType.SHADOW_BEAST,
+    name: 'Shadow Beast',
+    combatLevel: 28,
+    hitpoints: 35,
+    maxHit: 8,
+    attackLevel: 25,
+    strengthLevel: 22,
+    defenceLevel: 20,
+    attackSpeed: 4,
+    aggroRange: 6,
+    respawnTime: 0,
+    drops: [
+      { item: ItemType.VEIL_BONES, minQuantity: 1, maxQuantity: 1, weight: 100 },
+      { item: ItemType.CORRUPTED_HIDE, minQuantity: 1, maxQuantity: 2, weight: 60 },
+      { item: ItemType.SHADOW_FRAGMENT, minQuantity: 2, maxQuantity: 4, weight: 50 },
+      { item: ItemType.VEIL_ESSENCE, minQuantity: 2, maxQuantity: 4, weight: 55 },
+      { item: ItemType.VOID_SHARD, minQuantity: 1, maxQuantity: 1, weight: 10 },
+      { item: ItemType.COINS, minQuantity: 50, maxQuantity: 150, weight: 70 }
+    ],
+    isVeilCreature: true,
+    stabilityDrain: 8,
+    veilTier: 2
+  },
+
+  [NpcType.VEIL_WRAITH]: {
+    type: NpcType.VEIL_WRAITH,
+    name: 'Veil Wraith',
+    combatLevel: 45,
+    hitpoints: 55,
+    maxHit: 12,
+    attackLevel: 40,
+    strengthLevel: 38,
+    defenceLevel: 35,
+    attackSpeed: 4,
+    aggroRange: 8,
+    respawnTime: 0,
+    drops: [
+      { item: ItemType.VEIL_BONES, minQuantity: 1, maxQuantity: 1, weight: 100 },
+      { item: ItemType.CORRUPTED_HIDE, minQuantity: 2, maxQuantity: 3, weight: 70 },
+      { item: ItemType.SHADOW_FRAGMENT, minQuantity: 3, maxQuantity: 6, weight: 60 },
+      { item: ItemType.VEIL_ESSENCE, minQuantity: 3, maxQuantity: 6, weight: 65 },
+      { item: ItemType.VOID_SHARD, minQuantity: 1, maxQuantity: 2, weight: 25 },
+      { item: ItemType.COINS, minQuantity: 100, maxQuantity: 300, weight: 75 }
+    ],
+    isVeilCreature: true,
+    stabilityDrain: 12,
+    veilTier: 3
   }
+}
+
+// Get all Veil creatures for a given tier (includes lower tiers)
+export function getVeilCreaturesForTier(tier: number): NpcType[] {
+  return Object.values(NpcType).filter((npcType) => {
+    const def = NPC_DEFINITIONS[npcType]
+    return def?.isVeilCreature && def.veilTier !== undefined && def.veilTier <= tier
+  })
+}
+
+// Check if NPC is a Veil creature
+export function isVeilCreature(npcType: NpcType): boolean {
+  return NPC_DEFINITIONS[npcType]?.isVeilCreature === true
+}
+
+// Get stability drain for a Veil creature
+export function getStabilityDrain(npcType: NpcType): number {
+  return NPC_DEFINITIONS[npcType]?.stabilityDrain ?? 0
 }
 
 // Roll drops from an NPC's loot table

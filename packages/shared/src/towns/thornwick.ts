@@ -1,5 +1,15 @@
-// Thornwick - The First Town
-// Inspired by RuneScape's Varrock - a bustling medieval market town
+// Thornwick - The First Town of Aethermoor
+// Last bastion of civilization near The Veil rifts
+//
+// Once a prosperous trading hub, Thornwick now serves as the staging ground
+// for adventurers brave enough to venture into The Veil. Since The Sundering
+// fifty years ago, the town has adapted to its new reality - the shimmering
+// rift near the fountain a constant reminder of the dimension beyond.
+//
+// The Veil Wardens who once protected this region have vanished, leaving
+// only monuments and the knowledge they encoded in the ancient skill of
+// Veilwalking. Now, a new generation of scholars studies the rifts while
+// adventurers seek fortune in the twisted dimension.
 
 import { TileType } from '../types'
 import { WorldObjectType } from '../worldObjects'
@@ -65,10 +75,11 @@ function createArea(
 
 // Buildings
 const buildings: BuildingDefinition[] = [
-  // Thornwick Keep - Northern castle
+  // Warden's Keep - Northern fortress, once headquarters of the Veil Wardens
+  // Now serves as the town hall and houses historical archives about The Veil
   {
     id: 'thornwick_keep',
-    name: 'Thornwick Keep',
+    name: "Warden's Keep",
     x: 16,
     y: 2,
     width: 16,
@@ -79,7 +90,8 @@ const buildings: BuildingDefinition[] = [
     heightLevel: 2
   },
 
-  // Bank - East side
+  // Thornwick Bank - East side
+  // Secure storage for adventurers venturing into The Veil
   {
     id: 'thornwick_bank',
     name: 'Thornwick Bank',
@@ -93,10 +105,11 @@ const buildings: BuildingDefinition[] = [
     heightLevel: 1
   },
 
-  // General Store - West side
+  // Aethermoor Provisions - West side general store
+  // Supplies for expeditions and daily needs
   {
     id: 'general_store',
-    name: 'General Store',
+    name: 'Aethermoor Provisions',
     x: 4,
     y: 18,
     width: 7,
@@ -107,10 +120,11 @@ const buildings: BuildingDefinition[] = [
     heightLevel: 1
   },
 
-  // Blacksmith - Southwest
+  // The Sundering Forge - Southwest blacksmith
+  // Specializes in equipment that can withstand Veil energies
   {
     id: 'blacksmith',
-    name: 'Blacksmith',
+    name: 'The Sundering Forge',
     x: 4,
     y: 30,
     width: 8,
@@ -121,10 +135,12 @@ const buildings: BuildingDefinition[] = [
     heightLevel: 1
   },
 
-  // Inn - Southeast
+  // The Sundered Rest - Southeast inn
+  // Named for the event that changed Aethermoor forever
+  // A gathering place for adventurers to share tales of The Veil
   {
     id: 'thornwick_inn',
-    name: 'The Rusty Sword Inn',
+    name: 'The Sundered Rest',
     x: 34,
     y: 30,
     width: 10,
@@ -138,7 +154,19 @@ const buildings: BuildingDefinition[] = [
 
 // NPCs
 const npcs: NpcSpawnDefinition[] = [
-  // Guards at the main gates (passive - won't attack players)
+  // ============ VEIL SCHOLARS ============
+  // Scholars who study the rift and train new Veilwalkers
+  {
+    id: 'veil_scholar_1',
+    npcType: NpcType.VEIL_SCHOLAR,
+    x: 20,
+    y: 28, // Near the rift
+    patrolArea: { x: 18, y: 26, width: 6, height: 6 },
+    respawns: true
+  },
+
+  // ============ TOWN GUARDS ============
+  // Guards at the main gates - vigilant against Veil incursions
   {
     id: 'guard_south_1',
     npcType: NpcType.GUARD,
@@ -156,7 +184,7 @@ const npcs: NpcSpawnDefinition[] = [
     respawns: true
   },
 
-  // Guards at the keep
+  // Guards at Warden's Keep - protecting the archives
   {
     id: 'guard_keep_1',
     npcType: NpcType.GUARD,
@@ -174,7 +202,8 @@ const npcs: NpcSpawnDefinition[] = [
     respawns: true
   },
 
-  // Chickens near the inn
+  // ============ WILDLIFE ============
+  // Chickens near The Sundered Rest
   {
     id: 'chicken_1',
     npcType: NpcType.CHICKEN,
@@ -192,7 +221,7 @@ const npcs: NpcSpawnDefinition[] = [
     respawns: true
   },
 
-  // Rats in the alleys
+  // Giant rats - attracted by Veil energies
   {
     id: 'rat_1',
     npcType: NpcType.GIANT_RAT,
@@ -313,6 +342,43 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 26
   },
 
+  // ============ THE VEIL RIFT ============
+  // The main rift - a tear in reality that appeared during The Sundering
+  {
+    id: 'veil_rift_thornwick',
+    objectType: WorldObjectType.VEIL_RIFT,
+    x: 22,
+    y: 28
+  },
+
+  // Veil crystals - crystallized energy from the rift
+  {
+    id: 'veil_crystal_rift_1',
+    objectType: WorldObjectType.VEIL_CRYSTAL,
+    x: 21,
+    y: 27
+  },
+  {
+    id: 'veil_crystal_rift_2',
+    objectType: WorldObjectType.VEIL_CRYSTAL,
+    x: 23,
+    y: 29
+  },
+
+  // Veil-touched plants near the rift - mutated by proximity
+  {
+    id: 'veil_plant_rift_1',
+    objectType: WorldObjectType.VEIL_TOUCHED_PLANT,
+    x: 20,
+    y: 29
+  },
+  {
+    id: 'veil_plant_rift_2',
+    objectType: WorldObjectType.VEIL_TOUCHED_PLANT,
+    x: 24,
+    y: 27
+  },
+
   // Market stalls - functional shops!
   {
     id: 'stall_food',
@@ -337,6 +403,14 @@ const worldObjects: WorldObjectPlacement[] = [
     objectType: WorldObjectType.MARKET_STALL_FISH,
     x: 26,
     y: 30
+  },
+
+  // Notice board - adventurer postings and town announcements
+  {
+    id: 'notice_board_market',
+    objectType: WorldObjectType.NOTICE_BOARD,
+    x: 17,
+    y: 26
   },
 
   // Corner torches at marketplace
@@ -365,8 +439,8 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 31
   },
 
-  // ============ BLACKSMITH INTERIOR ============
-  // Anvil inside the blacksmith
+  // ============ THE SUNDERING FORGE INTERIOR ============
+  // Anvil inside the forge
   {
     id: 'anvil_blacksmith_interior',
     objectType: WorldObjectType.ANVIL,
@@ -401,22 +475,22 @@ const worldObjects: WorldObjectPlacement[] = [
     x: 6,
     y: 35
   },
-  // Outside blacksmith area
-  // Anvil outside the blacksmith (for outdoor work)
+  // Outside the forge
+  // Anvil outside (for outdoor work)
   {
     id: 'anvil_blacksmith',
     objectType: WorldObjectType.ANVIL,
     x: 13,
     y: 33
   },
-  // Barrel at blacksmith
+  // Barrel at the forge
   {
     id: 'barrel_blacksmith_1',
     objectType: WorldObjectType.BARREL,
     x: 3,
     y: 31
   },
-  // Crate at blacksmith
+  // Crate at the forge
   {
     id: 'crate_blacksmith_1',
     objectType: WorldObjectType.CRATE,
@@ -424,7 +498,7 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 33
   },
 
-  // ============ THE RUSTY SWORD INN INTERIOR ============
+  // ============ THE SUNDERED REST INTERIOR ============
   // Bar counter along east wall
   {
     id: 'inn_bar_1',
@@ -561,7 +635,7 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 22
   },
 
-  // ============ GENERAL STORE INTERIOR ============
+  // ============ AETHERMOOR PROVISIONS INTERIOR ============
   // Counter in the store
   {
     id: 'store_counter_1',
@@ -618,7 +692,7 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 18
   },
 
-  // ============ THORNWICK KEEP ============
+  // ============ WARDEN'S KEEP ============
   // Torches at keep entrance (offset from guard positions)
   {
     id: 'torch_keep_1',
@@ -633,7 +707,31 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 14
   },
 
+  // Warden Monument - honoring the fallen guardians
+  {
+    id: 'warden_monument',
+    objectType: WorldObjectType.WARDEN_MONUMENT,
+    x: 24,
+    y: 16
+  },
+
+  // Memorial plaque at the monument
+  {
+    id: 'warden_memorial_plaque',
+    objectType: WorldObjectType.LORE_PLAQUE,
+    x: 25,
+    y: 16
+  },
+
   // ============ SOUTH GATE AREA ============
+  // Town sign welcoming visitors
+  {
+    id: 'town_sign_south',
+    objectType: WorldObjectType.TOWN_SIGN,
+    x: 24,
+    y: 43
+  },
+
   // Hay bales near gate
   {
     id: 'hay_gate_1',
@@ -663,8 +761,8 @@ const worldObjects: WorldObjectPlacement[] = [
     y: 4
   },
 
-  // ============ NEAR INN / DECORATIVE ============
-  // Flower patches near inn
+  // ============ NEAR THE SUNDERED REST / DECORATIVE ============
+  // Flower patches near the inn
   {
     id: 'flowers_inn_1',
     objectType: WorldObjectType.FLOWER_PATCH,

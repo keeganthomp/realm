@@ -89,7 +89,18 @@ export enum WorldObjectType {
 
   // Mine props
   MINE_CART = 'mine_cart',
-  MINE_ENTRANCE = 'mine_entrance'
+  MINE_ENTRANCE = 'mine_entrance',
+
+  // Veil dimension
+  VEIL_RIFT = 'veil_rift',
+  VEIL_CRYSTAL = 'veil_crystal',
+  VEIL_TOUCHED_PLANT = 'veil_touched_plant',
+  WARDEN_MONUMENT = 'warden_monument',
+
+  // Signs and lore
+  TOWN_SIGN = 'town_sign',
+  LORE_PLAQUE = 'lore_plaque',
+  NOTICE_BOARD = 'notice_board'
 }
 
 // Action categories determine how interactions are handled
@@ -99,6 +110,7 @@ export enum ActionCategory {
   READ = 'read',         // Shows readable content (signs, books)
   SHOP = 'shop',         // Opens shop interface
   BANK = 'bank',         // Opens bank interface
+  VEIL = 'veil',         // Veil rift - enter expedition
   NONE = 'none'          // No interaction (pure decoration)
 }
 
@@ -572,6 +584,64 @@ export const WORLD_OBJECT_DEFINITIONS: Record<WorldObjectType, WorldObjectDefini
     action: 'Examine',
     actionCategory: ActionCategory.EXAMINE,
     examineText: 'A boarded-up mine entrance. Something lurks within...'
+  },
+
+  // ============ VEIL DIMENSION ============
+  [WorldObjectType.VEIL_RIFT]: {
+    type: WorldObjectType.VEIL_RIFT,
+    name: 'Veil Rift',
+    action: 'Enter',
+    actionCategory: ActionCategory.VEIL,
+    examineText: 'A shimmering tear in reality. Strange energies pulse from within.'
+  },
+  [WorldObjectType.VEIL_CRYSTAL]: {
+    type: WorldObjectType.VEIL_CRYSTAL,
+    name: 'Veil Crystal',
+    action: 'Examine',
+    actionCategory: ActionCategory.EXAMINE,
+    examineText:
+      'A crystallized shard of Veil energy. It pulses with an otherworldly glow, a remnant of The Sundering.'
+  },
+  [WorldObjectType.VEIL_TOUCHED_PLANT]: {
+    type: WorldObjectType.VEIL_TOUCHED_PLANT,
+    name: 'Veil-Touched Plant',
+    action: 'Examine',
+    actionCategory: ActionCategory.EXAMINE,
+    examineText:
+      'A plant mutated by proximity to the rift. Its leaves shimmer with faint purple luminescence.'
+  },
+  [WorldObjectType.WARDEN_MONUMENT]: {
+    type: WorldObjectType.WARDEN_MONUMENT,
+    name: 'Warden Monument',
+    action: 'Examine',
+    actionCategory: ActionCategory.EXAMINE,
+    examineText:
+      'A weathered statue of a Veil Warden. These guardians once protected the boundary between worlds.'
+  },
+
+  // ============ SIGNS AND LORE ============
+  [WorldObjectType.TOWN_SIGN]: {
+    type: WorldObjectType.TOWN_SIGN,
+    name: 'Town Sign',
+    action: 'Read',
+    actionCategory: ActionCategory.READ,
+    examineText: 'Welcome to Thornwick\nLast bastion before The Veil'
+  },
+  [WorldObjectType.LORE_PLAQUE]: {
+    type: WorldObjectType.LORE_PLAQUE,
+    name: 'Memorial Plaque',
+    action: 'Read',
+    actionCategory: ActionCategory.READ,
+    examineText:
+      'In memory of the Veil Wardens\nWho gave their lives during The Sundering\nMay their sacrifice never be forgotten'
+  },
+  [WorldObjectType.NOTICE_BOARD]: {
+    type: WorldObjectType.NOTICE_BOARD,
+    name: 'Notice Board',
+    action: 'Read',
+    actionCategory: ActionCategory.READ,
+    examineText:
+      'ADVENTURERS WANTED\nThe Veil grows unstable. Brave souls needed to venture within.\nSpeak to the Veil Scholar for training.\n\n- Town Council of Thornwick'
   }
 }
 

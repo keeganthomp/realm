@@ -1,6 +1,6 @@
 import { useState, useCallback, ReactNode } from 'react'
 
-export type PanelType = 'skills' | 'inventory' | 'equipment' | null
+export type PanelType = 'skills' | 'inventory' | 'equipment' | 'challenges' | 'achievements' | null
 
 interface SidebarProps {
   activePanel: PanelType
@@ -107,9 +107,23 @@ const EquipmentIcon = () => (
   </svg>
 )
 
+const ChallengesIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#d4a84b' }}>
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+)
+
+const AchievementsIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#d4a84b' }}>
+    <circle cx="12" cy="8" r="7" />
+    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+  </svg>
+)
+
 export function Sidebar({ activePanel, onPanelChange, children }: SidebarProps) {
   const handleButtonClick = useCallback(
-    (panel: 'skills' | 'inventory' | 'equipment') => {
+    (panel: 'skills' | 'inventory' | 'equipment' | 'challenges' | 'achievements') => {
       // Toggle: if clicking the active panel, close it; otherwise open the new one
       onPanelChange(activePanel === panel ? null : panel)
     },
@@ -169,6 +183,18 @@ export function Sidebar({ activePanel, onPanelChange, children }: SidebarProps) 
           label="Equipment"
           isActive={activePanel === 'equipment'}
           onClick={() => handleButtonClick('equipment')}
+        />
+        <SidebarButton
+          icon={<ChallengesIcon />}
+          label="Challenges"
+          isActive={activePanel === 'challenges'}
+          onClick={() => handleButtonClick('challenges')}
+        />
+        <SidebarButton
+          icon={<AchievementsIcon />}
+          label="Achievements"
+          isActive={activePanel === 'achievements'}
+          onClick={() => handleButtonClick('achievements')}
         />
       </div>
     </div>

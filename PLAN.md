@@ -1,808 +1,847 @@
-# Project Codename: REALM
+# Project Codename: VEILFALL
 
-A modern 2D browser MMO inspired by RuneScape, built for 2026.
+A stylized 3D browser MMO featuring dual-world exploration between a cel-shaded surface world and a luminous otherworldly dimension called "The Veil."
 
 ---
 
 ## Executive Summary
 
-Build a medieval fantasy 2D MMO with click-to-action gameplay, skill progression, equipment systems, and multiplayer support. RuneScape is the north star, but rebuilt with a hyper-modern stack optimized for performance, scalability, and developer experience.
+Transform the current OSRS-inspired foundation into a unique, visually striking MMO with a novel dual-world mechanic. Players alternate between a stylized cel-shaded surface world and an ethereal, bioluminescent dimension called "The Veil." The core progression loop (skills, equipment, drops) remains, but wrapped in a fresh aesthetic and gameplay hook that differentiates from existing MMOs.
 
 ---
 
-## Tech Stack (Current Versions)
+## The Vision
+
+### Core Concept: The Veil
+The world exists in two overlapping states:
+- **Surface World**: Stylized cel-shaded medieval fantasy (our current Thornwick, expanded)
+- **The Veil**: A luminous parallel dimension - same geography but transformed into crystalline, bioluminescent landscapes
+
+Players discover they can "pierce the Veil" and enter this otherworldly realm where:
+- Different creatures exist (Veil-touched variants, spectral beings)
+- Unique resources spawn (crystals, essences, luminous materials)
+- Time flows differently (expedition-based runs with time pressure)
+- Risk/reward is amplified (better drops, permadeath of expedition progress)
+
+### Visual Identity
+- **Surface**: Cel-shaded with thick outlines, muted earth tones, cozy medieval atmosphere
+- **Veil**: Dark environments with vibrant bioluminescence, glowing particles, crystalline structures
+- **Transition**: Dramatic visual shift when entering/exiting the Veil (screen distortion, color shift)
+
+### Why This Works
+1. **Novelty**: No major MMO does dual-world exploration like this
+2. **Viral Potential**: The visual contrast is shareable ("Wait, the world transforms?!")
+3. **Replayability**: Same areas have two sets of content
+4. **Technical Feasibility**: Achievable with Babylon.js shaders (no new models needed)
+5. **Progression Depth**: New skill trees, equipment tiers, and crafting systems
+
+---
+
+## Tech Stack (Unchanged)
 
 | Category | Technology | Version |
 |----------|------------|---------|
 | Rendering | Babylon.js | v8.6.0 |
 | UI Framework | React | v19.0.0 |
 | Multiplayer | Colyseus | v0.17.8 |
-| State Schema | @colyseus/schema | v4.0.7 |
-| Database | PostgreSQL | v16 (Alpine) |
+| Database | PostgreSQL | v16 |
 | ORM | Drizzle | v0.45.1 |
 | Build Tool | Vite | v6.0.0 |
 | Language | TypeScript | v5.9.3 |
-| Package Manager | pnpm | v9.12.2 |
-| Linting | ESLint | v9.39.2 |
-| Formatting | Prettier | v3.8.1 |
-| 3D Modeling | Blender | (latest) |
-| 3D Export | glTF/GLB | Native Babylon.js |
 
-### Rendering: **Babylon.js**
-- Full 3D engine with perspective camera
-- OSRS-style isometric view with Q/E rotation
-- Height-based terrain with cliff faces
-- Mesh instancing for terrain tiles
-- GUI system for health bars and labels
-
-### Backend: **Colyseus 0.17**
-- Node.js-based multiplayer framework
-- Built-in room management, state sync, WebSocket handling
-- Message-based sync for reliable initial state
-- TypeScript throughout for shared types client/server
-
-### Graphics: **Neo-Pixel Sprites**
-- 32x32 or 48x48 pixel art sprites
-- Modern enhancements: expanded palettes, subtle lighting
-- Spritesheet atlases for performance
-- Aseprite for asset creation
-
-### World Building: **Data-Driven Town System**
-- Towns defined as TypeScript data files in `shared/src/towns/`
-- Each town specifies bounds, buildings, NPCs, objects, tile overrides
-- WorldGenerator applies town data during chunk generation
-- Hybrid approach: structured towns within procedural wilderness
-- Agentic design - AI assists in creating town layouts from high-level descriptions
-
-### Database: **PostgreSQL + Drizzle ORM**
-- PostgreSQL for persistent player data, items, skills
-- Drizzle ORM for type-safe database operations
-- Auto-save every 30 seconds + save on disconnect
-
-### Build & Dev: **Vite + TypeScript + pnpm**
-- Fast HMR for rapid iteration
-- Monorepo structure (client/server/shared)
-- ESLint + Prettier with format-on-save
-- Easy local development with single command
-
----
-
-## Skill System (Inspired by OSRS)
-
-### Combat Skills (7)
-| Skill | Description |
-|-------|-------------|
-| Attack | Melee accuracy, unlocks better swords |
-| Strength | Melee damage output |
-| Defence | Damage reduction, unlocks better armor |
-| Ranged | Bow/crossbow proficiency |
-| Magic | Spellcasting, runes, teleportation |
-| Prayer | Buffs and protection prayers |
-| Hitpoints | Total health pool |
-
-### Gathering Skills (5)
-| Skill | Description |
-|-------|-------------|
-| Mining | Extract ores from rocks |
-| Fishing | Catch fish from water |
-| Woodcutting | Chop trees for logs |
-| Farming | Grow herbs and crops |
-| Hunter | Trap creatures |
-
-### Production Skills (7)
-| Skill | Description |
-|-------|-------------|
-| Smithing | Forge weapons and armor from bars |
-| Cooking | Prepare food for healing |
-| Crafting | Create jewelry, leather armor |
-| Fletching | Make bows and arrows |
-| Herblore | Brew potions from herbs |
-| Runecrafting | Create magic runes |
-| Construction | Build player-owned structures |
-
-### Support Skills (4)
-| Skill | Description |
-|-------|-------------|
-| Agility | Faster movement, shortcuts |
-| Thieving | Pickpocket NPCs, lockpicking |
-| Slayer | Kill assigned monsters for XP |
-| Firemaking | Light fires for cooking/warmth |
-
-**Total: 23 Skills** (can trim or add as needed)
-
-### XP Formula
-```
-XP to next level = floor(level^2 * 100)
-Level 1→2: 100 XP
-Level 50→51: 250,000 XP
-Level 99 cap (or 120 for endgame)
-```
-
----
-
-## Equipment System
-
-### Tiers (Bronze → Dragon)
-1. Bronze (Level 1)
-2. Iron (Level 10)
-3. Steel (Level 20)
-4. Mithril (Level 30)
-5. Adamant (Level 40)
-6. Rune (Level 50)
-7. Dragon (Level 60)
-8. Barrows (Level 70) - Set effects
-9. Godwars (Level 75) - Boss drops
-10. Elder (Level 80+) - Endgame
-
-### Equipment Slots
-- Head (Helmet)
-- Body (Chestplate)
-- Legs (Platelegs)
-- Hands (Gloves)
-- Feet (Boots)
-- Cape
-- Neck (Amulet)
-- Ring
-- Main hand (Weapon)
-- Off hand (Shield/secondary)
-- Ammo (Arrows/bolts)
-
-### Enchantments
-- Applied via Magic skill
-- Permanent stat bonuses
-- Examples: +5% accuracy, +10 HP, fire resistance
-
-### Potions (Herblore)
-| Potion | Effect |
-|--------|--------|
-| Attack | +10% attack for 5 min |
-| Strength | +10% damage for 5 min |
-| Defence | +10% armor for 5 min |
-| Prayer | Restore prayer points |
-| Super variants | +15% effects |
-| Antifire | Dragon breath immunity |
-
----
-
-## World Design
-
-### Biomes
-1. **Lumbridge-style Starting Zone** - Grasslands, farms, tutorial area
-2. **Varrock-style City** - Commerce hub, bank, grand exchange
-3. **Wilderness** - PvP zone, high-risk high-reward
-4. **Desert** - Heat mechanics, unique monsters
-5. **Swamp** - Poison hazards, herblore ingredients
-6. **Mountains** - Mining hotspots, dwarven caves
-7. **Forest** - Woodcutting, elven territory
-8. **Coastal** - Fishing, pirate quests
-9. **Dungeon Network** - Underground, boss lairs
-
-### Movement
-- Click-to-move pathfinding (A* algorithm)
-- Smooth interpolated movement (not tile-snapping)
-- Run/walk toggle (run drains stamina)
-- Agility shortcuts between zones
-
-### Interactions
-- Click object → character walks to it → action begins
-- Progress bar for skilling actions
-- Interruptible by combat or movement
-
----
-
-## Multiplayer Architecture
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Client    │────▶│  Colyseus   │────▶│    Redis    │
-│  (PixiJS)   │◀────│   Server    │◀────│   Cluster   │
-└─────────────┘     └─────────────┘     └─────────────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │ PostgreSQL  │
-                    │  (Players,  │
-                    │   Items)    │
-                    └─────────────┘
-```
-
-### Room Types
-- **WorldRoom**: Main game world, zoned by region
-- **DungeonRoom**: Instanced party dungeons
-- **PvPRoom**: Wilderness/arena combat
-- **MinigameRoom**: Isolated minigame instances
-
-### State Sync
-- Delta compression for bandwidth efficiency
-- 20 ticks/second server authority
-- Client-side prediction with server reconciliation
+### New Technical Focus
+- **Custom Shaders**: Cel-shading, glow effects, procedural textures
+- **Post-Processing**: Bloom, chromatic aberration, screen-space effects
+- **Procedural Generation**: Veil dimension terrain transformation
+- **Particle Systems**: Bioluminescence, portal effects, ambient atmosphere
 
 ---
 
 ## Phase Breakdown
 
-### Phase 1: Foundation (Core Engine) ✅
-**Goal**: Runnable local prototype with basic movement
+### Phase 0: Shader Infrastructure
+**Goal**: Build the foundation for all visual effects
 
-- [x] Project scaffolding (monorepo: client/server/shared)
-- [x] PixiJS renderer setup with sprite loading
-- [x] Tilemap loader (placeholder terrain)
-- [x] Click-to-move pathfinding (A*)
-- [x] Basic player sprite with 4-directional animation
-- [x] Camera following player
-- [x] Dev server with hot reload
+#### 0.1 ShaderManager System
+Create a centralized shader management system:
 
-**Deliverable**: Single-player walking around a test map
+```typescript
+// packages/client/src/systems/ShaderManager.ts
+class ShaderManager {
+  private shaderStore: Map<string, ShaderMaterial>
+  private nodeMatStore: Map<string, NodeMaterial>
 
----
+  // Cel-shading material factory
+  createCelShadeMaterial(name: string, baseColor: Color3, options?: CelShadeOptions): ShaderMaterial
 
-### Phase 2: Multiplayer Core ✅
-**Goal**: Multiple players visible and moving
+  // Glow/emission material for Veil objects
+  createGlowMaterial(name: string, glowColor: Color3, intensity: number): ShaderMaterial
 
-- [x] Colyseus server setup
-- [x] Player join/leave synchronization
-- [x] Position broadcasting
-- [x] Interpolation for remote players
-- [x] Basic chat system
-- [x] Player nameplates
+  // Shared uniforms (time, camera pos, light dir)
+  updateGlobalUniforms(deltaTime: number): void
+}
+```
 
-**Deliverable**: 2+ players can connect and see each other
+**Files to create:**
+- `packages/client/src/systems/ShaderManager.ts`
+- `packages/client/src/shaders/cel-shade.vertex.glsl`
+- `packages/client/src/shaders/cel-shade.fragment.glsl`
+- `packages/client/src/shaders/glow.vertex.glsl`
+- `packages/client/src/shaders/glow.fragment.glsl`
 
----
+#### 0.2 Cel-Shading Implementation
+Two-pass rendering approach:
 
-### Phase 3: Skill System MVP ✅
-**Goal**: Implement 3 core skills end-to-end
+**Pass 1 - Outline:**
+```glsl
+// Vertex shader: Expand vertices along normals
+vec3 expandedPosition = position + normal * outlineWidth;
 
-- [x] XP/Level data structures
-- [x] Woodcutting (click tree → chop → get logs)
-- [x] Fishing (click spot → fish → get fish)
-- [x] Cooking (use fish on fire → cook)
-- [x] Skill panel UI
-- [x] Level-up notifications
-- [x] Loading screen
-- [x] World object rendering and interaction
-- [x] Persist skills to database (PostgreSQL + Drizzle ORM)
+// Fragment shader: Solid outline color
+gl_FragColor = vec4(outlineColor, 1.0);
+```
 
-**Deliverable**: Players can level 3 skills
+**Pass 2 - Toon shading:**
+```glsl
+// Fragment shader: Quantize lighting into bands
+float NdotL = dot(normalize(vNormal), lightDirection);
+float lightIntensity = smoothstep(0.0, 0.01, NdotL) * 0.5 + 0.5;
+float quantized = floor(lightIntensity * bands) / bands;
+gl_FragColor = vec4(baseColor * quantized, 1.0);
+```
 
----
+#### 0.3 Post-Processing Pipeline
+```typescript
+// packages/client/src/systems/PostProcessManager.ts
+class PostProcessManager {
+  private pipeline: PostProcessRenderPipeline
 
-### Phase 4: Inventory & Items ✅
-**Goal**: Full item management
+  // Standard effects
+  addBloom(threshold: number, intensity: number): void
+  addVignette(weight: number): void
 
-- [x] Inventory grid UI (28 slots like RS)
-- [x] Item definitions (shared/items.ts)
-- [x] Items granted from skilling (logs, fish)
-- [x] Inventory persistence to database
-- [x] Drop items (right-click context menu)
-- [x] Item stacking (coins, feathers, fishing bait)
-- [x] Use item on object (select raw fish → click fire → cook)
-- [x] Bank storage (click bank booth, deposit/withdraw items)
+  // Veil-specific effects
+  addChromaticAberration(intensity: number): void
+  addScreenDistortion(waveAmplitude: number): void
 
-**Deliverable**: Players can collect and store items
+  // Dimension transition effect
+  playVeilTransition(entering: boolean, duration: number): Promise<void>
+}
+```
 
----
-
-### Phase 5: Combat System ✅
-**Goal**: PvE combat loop
-
-- [x] Combat stats (Attack, Strength, Defence, Hitpoints)
-- [x] NPC spawning (Chicken lvl 1, Cow lvl 2, Goblin lvl 5)
-- [x] Click-to-attack targeting (walk to NPC, auto-attack)
-- [x] Damage calculation formulas (OSRS-style accuracy/max hit)
-- [x] Death and respawning (NPCs respawn after timer, players at spawn)
-- [x] Loot drops (bones, raw meat, feathers, coins)
-- [x] Combat XP gains (4 XP per damage + 1.33 HP XP)
-- [x] Combat styles (Accurate/Aggressive/Defensive)
-- [x] NPC health bars (always visible, color-coded)
-- [x] Hit splats (damage numbers on hit)
-- [x] Aggro system (Goblins attack players within 3 tiles)
-- [x] Food eating (right-click food in inventory to heal)
-
-**Deliverable**: Players can fight monsters ✅
+**Deliverable**: Shader system ready for use by all game objects
 
 ---
 
-### Phase 5.5: 3D Terrain ✅
-**Goal**: Height-based 3D world
+### Phase 1: Surface World Visual Overhaul
+**Goal**: Apply cel-shading to existing content
 
-- [x] Babylon.js 3D renderer with perspective camera
-- [x] Multi-level terrain with height map
-- [x] Cliff faces auto-generated between levels
-- [x] Height-aware A* pathfinding (can't climb cliffs > 1 level)
-- [x] OSRS-style camera angle (Q/E to rotate 45°)
-- [x] Entities positioned at correct Y height
-- [x] Mesh instancing for performance
+#### 1.1 Terrain Cel-Shading
+Modify TilemapRenderer to use cel-shade materials:
 
-**Deliverable**: 3D explorable world with elevation
+```typescript
+// In TilemapRenderer.ts
+private createTerrainMaterial(tileType: TileType): Material {
+  const baseColor = TILE_COLORS[tileType]
+  return this.shaderManager.createCelShadeMaterial(
+    `terrain_${tileType}`,
+    baseColor,
+    { bands: 3, outlineWidth: 0.02 }
+  )
+}
+```
 
----
+**Files to modify:**
+- `packages/client/src/systems/TilemapRenderer.ts` - Use cel-shade materials
+- `packages/client/src/entities/WorldObjectEntity.ts` - Trees, objects with outlines
 
-### Phase 6: Town System Architecture ✅
-**Goal**: Data-driven town system for agentic world design
+#### 1.2 Character Cel-Shading
+Update SimpleCharacter to use cel-shaded materials:
 
-Instead of a manual in-game editor, we use TypeScript data files that define towns declaratively. AI agents can generate and iterate on town designs from high-level descriptions.
+```typescript
+// In SimpleCharacter.ts
+private createLimbMaterial(color: Color3): Material {
+  return this.shaderManager.createCelShadeMaterial(
+    `limb_${this.id}`,
+    color,
+    { bands: 2, outlineWidth: 0.015 }
+  )
+}
+```
 
-#### 6.1 Town Definition System ✅
-- [x] TownDefinition interface with bounds, buildings, NPCs, objects
-- [x] BuildingDefinition with walls, floors, doors
-- [x] NpcSpawnDefinition with patrol areas
-- [x] WorldObjectPlacement for static objects
-- [x] TileOverride for roads, paths, water features
-- [x] Town registry with registration functions
+**Files to modify:**
+- `packages/client/src/character/SimpleCharacter.ts`
+- `packages/client/src/entities/NpcEntity.ts`
 
-#### 6.2 WorldGenerator Integration ✅
-- [x] Apply town tiles during chunk generation
-- [x] Building wall/floor rendering
-- [x] Town objects placed automatically
-- [x] Hybrid approach: towns within procedural wilderness
-- [x] Height-aware building placement
+#### 1.3 Environment Polish
+- Add ambient particles (dust motes, pollen)
+- Add subtle fog with depth
+- Add animated water shader for ponds/rivers
+- Add wind animation to trees (vertex displacement)
 
-#### 6.3 Town Utilities ✅
-- [x] isInTownBounds() - Check if tile is in a town
-- [x] isBuildingWall() - Check if tile is a wall
-- [x] getTownAtTile() - Find town at position
-- [x] Path creation helpers
-- [x] Area fill helpers
-
-**Deliverable**: Data-driven town system ✅
-
----
-
-### Phase 7: First Town - Thornwick ✅
-**Goal**: Create the first town using the data-driven system
-
-Thornwick is a 48x48 tile medieval market town inspired by Varrock.
-
-#### 7.1 Town Layout ✅
-- [x] 48x48 tile area centered around player spawn
-- [x] Perimeter walls with south gate
-- [x] Central marketplace square
-- [x] Stone road network connecting buildings
-- [x] Small pond in southwest corner
-
-#### 7.2 Buildings ✅
-- [x] Thornwick Keep (northern castle, 16x12)
-- [x] Thornwick Bank (east side, 8x6)
-- [x] General Store (west side, 7x6)
-- [x] Blacksmith (southwest, 8x7)
-- [x] The Rusty Sword Inn (southeast, 10x8)
-
-#### 7.3 World Objects ✅
-- [x] Bank booth inside bank
-- [x] Trees scattered around town
-- [x] Oak trees near the keep
-- [x] Willow tree by the pond
-- [x] Fishing spot in pond
-
-#### 7.4 NPCs ✅
-- [x] Guards at south gate (passive, won't attack players)
-- [x] Guards at keep entrance (passive)
-- [x] Chickens near the inn
-- [x] Giant rat in alleys
-
-#### 7.5 Town Decoration & Polish ✅
-- [x] Fix guards using passive GUARD NPC type (not aggressive goblins)
-- [x] Central marketplace fountain
-- [x] 4 colored market stalls (red, blue, green, yellow)
-- [x] Torches at key locations (marketplace corners, bank, keep)
-- [x] Cooking fire inside the inn
-- [x] Blacksmith exterior: anvil, barrel, crate
-- [x] Inn exterior: bench, table, barrels, flower patches
-- [x] General store: crates, barrel, sign post
-- [x] South gate: hay bales
-- [x] Corner bushes for visual softening
-- [x] Rocks near fishing pond
-
-#### 7.6 Remaining Work
-- [ ] Tutorial NPC / guide
-- [ ] Shopkeeper NPCs (functional shops)
-- [ ] Mining rocks outside town
-- [ ] Cow field outside town
-- [ ] Goblin camp further out
-
-**Deliverable**: Polished, vibrant starter town ✅
+**Deliverable**: Existing game has cohesive cel-shaded aesthetic
 
 ---
 
-### Phase 8: Equipment System ✅ (Partial)
-**Goal**: Gear progression
+### Phase 2: The Veil Dimension
+**Goal**: Create the parallel luminous world
 
-#### 8.1 Equipment Slots & UI ✅
-- [x] 7 equipment slots (head, body, legs, feet, hands, weapon, offhand)
-- [x] Equipment panel UI with character silhouette
-- [x] Right-click inventory item → "Equip" option
-- [x] Click equipped item to unequip
-- [x] Equipment bonuses (attack, strength, defence)
-- [x] Two-handed weapon logic (unequips offhand)
-- [x] Level requirements for equipment
+#### 2.1 Veil Material System
+```typescript
+// packages/client/src/systems/VeilMaterials.ts
+interface VeilMaterialOptions {
+  baseColor: Color3
+  glowColor: Color3
+  glowIntensity: number
+  pulseSpeed: number
+  crystalline: boolean
+}
 
-#### 8.2 Equipment Tiers ✅
-- [x] Bronze tier (level 1): sword, shield, helmet, chestplate, legs
-- [x] Iron tier (level 10): sword, shield, helmet, chestplate, legs
-- [x] Steel tier (level 20): sword, 2H sword, shield, helmet, chestplate, legs
-- [x] Basic gear: wooden shield, leather body (no requirements)
+class VeilMaterials {
+  // Bioluminescent terrain
+  createVeilTerrainMaterial(tileType: TileType): Material
 
-#### 8.3 Visual Equipment ✅
-- [x] Equipment meshes visible on player model
-- [x] Equipment meshes visible on remote players
-- [x] Tier-based materials (bronze/iron/steel colors)
-- [x] Attachment points (rightHand, leftHand, head, body)
+  // Glowing flora
+  createVeilPlantMaterial(options: VeilMaterialOptions): Material
 
-#### 8.4 Equipment Acquisition ✅
-- [x] Weapons stall sells bronze equipment
-- [x] Goblins drop bronze equipment (rare)
-- [x] Guards drop iron equipment (rare)
-- [x] New players start with bronze sword, wooden shield, leather body
+  // Crystal formations
+  createCrystalMaterial(color: Color3, transparency: number): Material
 
-#### 8.5 Combat Integration ✅
-- [x] Equipment bonuses affect combat calculations
-- [x] Attack bonus improves hit chance
-- [x] Strength bonus increases max hit
-- [x] Defence bonus reduces incoming damage
-- [x] Database persistence for equipment
+  // Veil creature materials (ethereal, semi-transparent)
+  createVeilCreatureMaterial(options: VeilMaterialOptions): Material
+}
+```
 
-#### 8.7 Mining & Smithing (Planned)
-- [ ] Mining skill (rocks → ore)
-- [ ] Smithing skill (ore → bar → item)
-- [ ] Furnace for smelting
-- [ ] Anvil crafting interface
-- [ ] Add ore rocks outside town
+#### 2.2 Veil Terrain Transformation
+The Veil uses the same tile positions but transforms them:
 
-**Deliverable**: Players can equip and upgrade gear ✅
+```typescript
+// packages/client/src/systems/VeilRenderer.ts
+class VeilRenderer {
+  // Transform surface tile to Veil equivalent
+  transformTile(surfaceTile: TileType): VeilTileType {
+    const mappings = {
+      [TileType.GRASS]: VeilTileType.LUMINOUS_MOSS,
+      [TileType.WATER]: VeilTileType.LIQUID_LIGHT,
+      [TileType.STONE]: VeilTileType.DARK_CRYSTAL,
+      [TileType.SAND]: VeilTileType.GLOWING_SAND,
+      [TileType.TREE]: VeilTileType.CRYSTAL_SPIRE
+    }
+    return mappings[surfaceTile]
+  }
 
----
+  // Spawn Veil-specific objects at surface object locations
+  transformWorldObjects(surfaceObjects: WorldObject[]): VeilObject[]
+}
+```
 
-### Phase 8.5: Procedural Character System ✅
-**Goal**: Replace GLB models with procedural joint-based characters
+#### 2.3 Veil Visuals
+**Color Palette:**
+- Background: Deep purples, dark blues (#0a0a1a, #1a0a2e)
+- Glow colors: Cyan (#00ffff), Magenta (#ff00ff), Gold (#ffdd00)
+- Crystal colors: Ice blue (#aaffff), Violet (#aa00ff), Amber (#ffaa00)
 
-- [x] SimpleCharacter class with TransformNode hierarchy
-- [x] Joint-based animation system (walk cycle, idle)
-- [x] OSRS-style chunky aesthetic (gaps at joints like waist, shoulders)
-- [x] Equipment attachment system per joint
-- [x] Remote player equipment sync
-- [x] Performance optimizations (mesh instancing, freezeWorldMatrix)
-- [x] Memory leak fixes in dispose() methods
+**Effects:**
+- Constant ambient particles (floating light motes)
+- Pulsing glow on all organic materials
+- Crystal formations with internal light refraction
+- Luminous fog that reveals movement
+- Stars/void visible through gaps in terrain
 
-**Deliverable**: Performant procedural characters ✅
+#### 2.4 Veil Creatures
+New enemy types exclusive to the Veil:
 
----
+```typescript
+// packages/shared/src/veilCreatures.ts
+enum VeilCreatureType {
+  WISP,           // Floating light orb, easy
+  SHADE,          // Shadow creature, medium
+  CRYSTAL_GOLEM,  // Defensive, medium
+  VEIL_STALKER,   // Fast, aggressive, hard
+  LUMINARCH,      // Mini-boss, glowing humanoid
+  VOID_HORROR     // Boss, massive, tentacles
+}
 
-### Phase 8.6: Combat Polish (Planned)
-**Goal**: Improve combat feedback and balance
+interface VeilCreatureDefinition {
+  type: VeilCreatureType
+  name: string
+  combatLevel: number
+  hitpoints: number
+  maxHit: number
+  attackSpeed: number
+  veilOnly: true
+  glowColor: string
+  drops: VeilLootTableEntry[]
+}
+```
 
-- [ ] HP regeneration (1 HP per minute out of combat)
-- [ ] Player hit splats (damage numbers when hit)
-- [ ] Screen flash effect when taking damage
-- [ ] Add Hobgoblin (lvl 28) for steel drops
-- [ ] Add Black Knight (lvl 33) for rare steel armor
-
-**Deliverable**: Polished combat experience
-
----
-
-### Phase 9: Magic & Prayer
-**Goal**: Complete combat triangle
-
-- [ ] Magic skill and spellbook
-- [ ] Rune system
-- [ ] Ranged skill
-- [ ] Prayer skill and prayer book
-- [ ] Combat styles (melee/range/mage)
-
-**Deliverable**: All combat styles functional
-
----
-
-### Phase 10: World Expansion
-**Goal**: Build additional zones using the editor
-
-- [ ] Second town / city (commerce hub)
-- [ ] Zone transitions between areas
-- [ ] Quest framework (basic fetch/kill quests)
-- [ ] Wilderness / PvP zone
-- [ ] Dungeon (instanced or open-world)
-- [ ] World bosses
-
-**Deliverable**: Multiple connected zones to explore
+**Deliverable**: Fully realized Veil dimension with unique visuals
 
 ---
 
-### Phase 11: Social & Economy
-**Goal**: Player interaction systems
+### Phase 3: Dual-World Mechanics
+**Goal**: Implement the transition and expedition systems
 
-- [ ] Trading between players
-- [ ] Grand Exchange (auction house)
-- [ ] Friends list
-- [ ] Clans/guilds
-- [ ] Private messaging
+#### 3.1 Veil Rifts
+Specific locations where players can enter the Veil:
 
-**Deliverable**: Full social features
+```typescript
+// packages/shared/src/veilRifts.ts
+interface VeilRift {
+  id: string
+  position: TilePosition
+  stabilityRequired: number  // Minimum "Veil Stability" stat to enter
+  destinationTier: number    // Difficulty tier of that section
+}
+
+// Thornwick example: Rift appears near the mysterious fountain at night
+const THORNWICK_RIFTS: VeilRift[] = [
+  {
+    id: 'thornwick_fountain',
+    position: { tileX: 24, tileY: 26 },
+    stabilityRequired: 0,
+    destinationTier: 1
+  }
+]
+```
+
+#### 3.2 Expedition System
+Players don't freely roam the Veil - they go on timed expeditions:
+
+```typescript
+// packages/shared/src/expeditions.ts
+interface Expedition {
+  playerId: string
+  riftId: string
+  startTime: number
+  maxDuration: number      // e.g., 10 minutes
+  veilStability: number    // Countdown, reaches 0 = forced extraction
+  collectedLoot: VeilItem[]
+  currentDepth: number     // How far they've progressed
+}
+
+// Veil Stability decreases over time, faster when:
+// - Taking damage
+// - Being in combat
+// - Deeper in the Veil
+
+// Ways to restore stability:
+// - Consume Veil Crystals (rare resource)
+// - Find stability nodes (safe points)
+// - Use Veilwalking skill abilities
+```
+
+#### 3.3 Dimension Transition
+Visual and gameplay transition:
+
+```typescript
+// packages/client/src/systems/DimensionManager.ts
+class DimensionManager {
+  currentDimension: 'surface' | 'veil'
+
+  async enterVeil(riftId: string): Promise<void> {
+    // 1. Play screen distortion effect
+    await this.postProcess.playVeilTransition(true, 2000)
+
+    // 2. Swap terrain renderer
+    this.tilemapRenderer.setMode('veil')
+
+    // 3. Swap creature spawns
+    this.entityManager.switchToVeil()
+
+    // 4. Start expedition timer
+    this.expedition.start()
+
+    // 5. Play ambient Veil sounds
+    this.audio.playVeilAmbience()
+  }
+
+  async exitVeil(voluntary: boolean): Promise<void> {
+    // If forced (stability = 0), lose uncollected loot
+    if (!voluntary) {
+      this.expedition.dropUnbankedLoot()
+    }
+
+    await this.postProcess.playVeilTransition(false, 2000)
+    this.tilemapRenderer.setMode('surface')
+    this.entityManager.switchToSurface()
+    this.expedition.end()
+  }
+}
+```
+
+#### 3.4 Veil Banking
+Players must "secure" loot to keep it:
+
+```typescript
+// Veil Anchors: special objects in the Veil that let you bank mid-expedition
+// Finding one is like finding a checkpoint
+
+interface VeilAnchor {
+  position: TilePosition
+  charges: number  // Limited uses before it fades
+}
+
+// When using an anchor:
+// - Items in "secured" slot are safe even if expedition fails
+// - Restores some Veil Stability
+// - Creates temporary return point
+```
+
+**Deliverable**: Full dual-world gameplay loop
 
 ---
 
-### Phase 12: Polish & Scale
-**Goal**: Production readiness
+### Phase 4: Progression Updates
+**Goal**: New skills, items, and equipment tiers for Veil content
 
-- [ ] Performance optimization
-- [ ] Load testing (1000+ concurrent)
-- [ ] Anti-cheat measures
-- [ ] Account security
-- [ ] Mobile-responsive UI
-- [ ] Sound effects and music
-- [ ] Deployment pipeline
+#### 4.1 New Skills
 
-**Deliverable**: Launchable game
+**Veilwalking (Support Skill)**
+```typescript
+// packages/shared/src/skills.ts - Add to SkillType enum
+VEILWALKING = 'veilwalking'
+
+// Skill definition
+{
+  type: SkillType.VEILWALKING,
+  name: 'Veilwalking',
+  icon: '🌀',
+  description: 'Mastery of the Veil dimension',
+  // Higher levels grant:
+  // - Increased max Veil Stability
+  // - Slower stability decay
+  // - Ability to see hidden Veil objects
+  // - Access to deeper Veil tiers
+}
+```
+
+**Crystallurgy (Production Skill)**
+```typescript
+CRYSTALLURGY = 'crystallurgy'
+
+// Skill definition
+{
+  type: SkillType.CRYSTALLURGY,
+  name: 'Crystallurgy',
+  icon: '💎',
+  description: 'Craft items from Veil crystals',
+  // Allows:
+  // - Refining raw Veil crystals
+  // - Crafting Veil equipment
+  // - Creating stability potions
+  // - Infusing surface items with Veil power
+}
+```
+
+**Binding (Production Skill)**
+```typescript
+BINDING = 'binding'
+
+// Skill definition
+{
+  type: SkillType.BINDING,
+  name: 'Binding',
+  icon: '🔗',
+  description: 'Capture and bind Veil creatures',
+  // Allows:
+  // - Trapping Wisps for light sources
+  // - Binding creatures as pets/familiars
+  // - Creating summons for combat
+  // - Harvesting essence from creatures
+}
+```
+
+#### 4.2 New Item Types
+
+```typescript
+// packages/shared/src/veilItems.ts
+enum VeilItemType {
+  // Raw materials
+  RAW_CRYSTAL,
+  LUMINOUS_SHARD,
+  VOID_ESSENCE,
+  WISP_DUST,
+  SHADE_CLOTH,
+
+  // Refined materials
+  REFINED_CRYSTAL,
+  VEIL_INGOT,
+  LUMINOUS_THREAD,
+
+  // Consumables
+  STABILITY_POTION,    // Restores Veil Stability
+  VEIL_ANCHOR_SHARD,   // Creates temporary anchor
+  LIGHT_FLASK,         // Temporary illumination
+
+  // Equipment components
+  CRYSTAL_CORE,        // For crafting Veil weapons
+  LUMINOUS_ESSENCE,    // For infusing armor
+  VOID_GEM             // For high-tier enchants
+}
+```
+
+#### 4.3 Equipment Tiers (Updated)
+
+| Tier | Name | Level | Source | Visual |
+|------|------|-------|--------|--------|
+| 1 | Bronze | 1 | Craft/Buy | Warm brown |
+| 2 | Iron | 10 | Craft/Drop | Dark gray |
+| 3 | Steel | 20 | Craft/Drop | Silver |
+| 4 | Mithril | 30 | Craft/Drop | Blue tint |
+| 5 | Adamant | 40 | Craft/Drop | Green tint |
+| 6 | Rune | 50 | Craft/Drop | Cyan glow |
+| 7 | **Veil-touched** | 60 | Veil drops | Subtle inner glow |
+| 8 | **Crystalline** | 70 | Veil craft | Transparent with glow |
+| 9 | **Void-forged** | 80 | Veil boss | Dark with particles |
+| 10 | **Luminarch** | 90 | Endgame | Full bioluminescence |
+
+**Veil Equipment Bonuses:**
+- Veil-touched: +5% Veil Stability
+- Crystalline: +10% Veil Stability, minor glow
+- Void-forged: +15% Veil damage, -5% stability decay
+- Luminarch: Full set bonus - immune to stability drain for 30s after kill
+
+#### 4.4 Infusion System
+Surface equipment can be enhanced with Veil materials:
+
+```typescript
+interface InfusionRecipe {
+  baseItem: ItemType
+  veilMaterial: VeilItemType
+  result: ItemType
+  crystallurgyLevel: number
+}
+
+const INFUSIONS: InfusionRecipe[] = [
+  {
+    baseItem: ItemType.RUNE_SWORD,
+    veilMaterial: VeilItemType.LUMINOUS_ESSENCE,
+    result: ItemType.LUMINOUS_RUNE_SWORD,
+    crystallurgyLevel: 65
+  }
+  // Infused items gain:
+  // - Visual glow effect
+  // - Bonus damage vs Veil creatures
+  // - Minor Veil Stability boost when equipped
+]
+```
+
+**Deliverable**: Complete progression system bridging surface and Veil
 
 ---
 
-## Project Structure
+### Phase 5: UI Overhaul
+**Goal**: Cohesive UI that supports dual-world gameplay
+
+#### 5.1 Visual Theme
+- **Surface UI**: Warm wood/parchment theme, gold accents
+- **Veil UI**: Dark translucent panels, cyan/magenta accents, glowing borders
+- UI smoothly transitions when changing dimensions
+
+#### 5.2 New Panels
+
+**Expedition Panel** (`ExpeditionPanel.tsx`)
+```typescript
+interface ExpeditionPanelProps {
+  isInVeil: boolean
+  stability: number
+  maxStability: number
+  elapsedTime: number
+  maxTime: number
+  securedItems: Item[]
+  unsecuredItems: Item[]
+  currentDepth: number
+}
+```
+Shows:
+- Veil Stability bar (depleting)
+- Time remaining
+- Current depth/progress
+- Secured vs unsecured loot
+
+**Bestiary Panel** (`BestiaryPanel.tsx`)
+- Log of discovered creatures (surface + Veil)
+- Weaknesses, drop tables (revealed through kills)
+- Completion percentage
+
+**Veil Map** (`VeilMapPanel.tsx`)
+- Discovered Veil areas
+- Known rift locations
+- Stability node locations
+
+#### 5.3 HUD Updates
+- Dimension indicator (surface/veil icon)
+- Stability bar when in Veil (prominent, center-top)
+- Visual filter toggle (for accessibility)
+
+**Deliverable**: Polished UI supporting all features
+
+---
+
+### Phase 6: Content Expansion
+**Goal**: Fill both worlds with content
+
+#### 6.1 Surface Towns (In Order)
+1. **Thornwick** (existing) - Medieval market town, Tier 1 rift
+2. **Saltmere** - Coastal fishing port, Tier 2 rift
+3. **Ironhold** - Mountain mining settlement, Tier 3 rift
+4. **Shadowfen** - Swamp village, Tier 4 rift
+
+#### 6.2 Veil Zones
+Each surface area has a Veil counterpart:
+- **Thornwick Veil**: Crystal Gardens - Entry level, wisps and crystal formations
+- **Saltmere Veil**: Luminous Depths - Underwater feel, jellyfish creatures
+- **Ironhold Veil**: Void Caverns - Dark, crystal golems, valuable ore
+- **Shadowfen Veil**: The Murk - Dense fog, stalkers, rare herbs
+
+#### 6.3 Boss Encounters
+**Surface Bosses:**
+- Giant Rat King (Thornwick sewers)
+- Sea Serpent (Saltmere coast)
+- Stone Giant (Ironhold mines)
+- Bog Witch (Shadowfen)
+
+**Veil Bosses:**
+- The Luminarch (Thornwick Veil) - Humanoid light being
+- Abyssal Leviathan (Saltmere Veil) - Massive bioluminescent fish
+- Void Colossus (Ironhold Veil) - Living crystal formation
+- The Unnamed (Shadowfen Veil) - Lovecraftian horror, final boss
+
+**Deliverable**: Rich world with exploration incentives
+
+---
+
+### Phase 7: Social & Viral Features
+**Goal**: Built-in sharability and social hooks
+
+#### 7.1 Clip Tool
+In-game recording for shareable moments:
+
+```typescript
+interface ClipSettings {
+  duration: 15 | 30 | 60  // seconds
+  quality: 'medium' | 'high'
+  includeUI: boolean
+}
+
+class ClipRecorder {
+  // Auto-captures last N seconds in buffer
+  private buffer: FrameData[]
+
+  // Triggered by:
+  // - Boss kill
+  // - Achievement unlock
+  // - Rare drop
+  // - Manual hotkey
+
+  saveClip(trigger: string): Promise<ClipFile>
+  shareToDiscord(clip: ClipFile): Promise<string>
+}
+```
+
+#### 7.2 Leaderboards
+- **Expedition Records**: Fastest runs, deepest dives, most loot
+- **Total Levels**: Combined skill levels
+- **Boss Kill Counts**: Per-boss rankings
+- **Achievement Points**: Total points earned
+
+#### 7.3 Social Expeditions
+- Party expeditions (2-4 players)
+- Shared Veil Stability pool
+- Combo attacks and synergies
+- Shared loot (with roll system)
+
+#### 7.4 Pet System
+Veil creatures can be bound as pets:
+
+```typescript
+interface Pet {
+  type: VeilCreatureType
+  name: string
+  variant: 'normal' | 'shiny' | 'void'
+  abilities: PetAbility[]
+  bondLevel: number  // Increases with time
+}
+
+// Pets provide:
+// - Visual flair (follows player)
+// - Minor bonuses at high bond
+// - Rare shiny variants (1/500)
+// - Shareable flex
+```
+
+**Deliverable**: Viral-ready social features
+
+---
+
+## Implementation Priority
+
+### Immediate (Phase 0-1)
+1. ShaderManager infrastructure
+2. Cel-shading on terrain
+3. Cel-shading on characters
+4. Post-processing setup
+
+### Short-term (Phase 2-3)
+1. Veil material system
+2. Veil terrain renderer
+3. Dimension transition
+4. Expedition mechanics
+5. Veil creatures (3-5 types)
+
+### Medium-term (Phase 4-5)
+1. New skills (Veilwalking, Crystallurgy, Binding)
+2. Veil items and equipment
+3. UI overhaul
+4. Infusion system
+
+### Long-term (Phase 6-7)
+1. Additional towns (Saltmere, Ironhold)
+2. Boss encounters
+3. Clip tool
+4. Pet system
+5. Leaderboards
+
+---
+
+## File Structure (New/Modified)
+
+### New Files
 
 ```
-realm/
-├── packages/
-│   ├── client/                 # Babylon.js + React game client
-│   │   ├── src/
-│   │   │   ├── main.tsx        # Entry point
-│   │   │   ├── App.tsx         # React app with UI overlays
-│   │   │   ├── Game.ts         # Main game controller
-│   │   │   ├── entities/       # Player, RemotePlayer, WorldObjectEntity, NpcEntity
-│   │   │   ├── systems/        # Camera, Pathfinding, NetworkManager, TilemapRenderer
-│   │   │   └── ui/             # React components (SkillsPanel, InventoryPanel, Chat, etc.)
-│   │   ├── index.html
-│   │   └── package.json
+packages/
+├── client/src/
+│   ├── systems/
+│   │   ├── ShaderManager.ts        # Shader factory and management
+│   │   ├── PostProcessManager.ts   # Post-processing effects
+│   │   ├── VeilRenderer.ts         # Veil dimension rendering
+│   │   ├── DimensionManager.ts     # Surface/Veil transitions
+│   │   └── ClipRecorder.ts         # Video clip capture
 │   │
-│   ├── server/                 # Colyseus game server
-│   │   ├── src/
-│   │   │   ├── index.ts        # Server entry point
-│   │   │   ├── rooms/          # WorldRoom (main game room)
-│   │   │   ├── schemas/        # Player, WorldState, WorldObject, NPC schemas
-│   │   │   ├── world/          # WorldGenerator (procedural + town integration)
-│   │   │   └── database/       # Drizzle ORM schema and queries
-│   │   ├── drizzle.config.ts
-│   │   └── package.json
+│   ├── shaders/
+│   │   ├── cel-shade.vertex.glsl
+│   │   ├── cel-shade.fragment.glsl
+│   │   ├── glow.vertex.glsl
+│   │   ├── glow.fragment.glsl
+│   │   ├── crystal.vertex.glsl
+│   │   ├── crystal.fragment.glsl
+│   │   ├── transition.fragment.glsl
+│   │   └── water.fragment.glsl
 │   │
-│   └── shared/                 # Shared types and game data
-│       └── src/
-│           ├── index.ts        # Core types, coordinate utils
-│           ├── types.ts        # Base types (TileType, Position, Direction)
-│           ├── skills.ts       # 23 skill definitions, XP formulas
-│           ├── items.ts        # Item definitions (logs, fish, etc.)
-│           ├── npcs.ts         # NPC definitions (combat stats, loot tables)
-│           ├── worldObjects.ts # World object definitions (trees, fishing spots)
-│           ├── combat.ts       # Combat formulas and calculations
-│           ├── chunks/         # Chunk schema, validation
-│           └── towns/          # Town definitions (data-driven world design)
-│               ├── index.ts    # Town system, registry, utilities
-│               └── thornwick.ts # First town - Thornwick
+│   ├── ui/
+│   │   ├── ExpeditionPanel.tsx     # Veil expedition HUD
+│   │   ├── BestiaryPanel.tsx       # Creature log
+│   │   ├── VeilMapPanel.tsx        # Discovered Veil areas
+│   │   ├── PetPanel.tsx            # Pet management
+│   │   └── LeaderboardPanel.tsx    # Rankings
+│   │
+│   └── entities/
+│       └── VeilCreatureEntity.ts   # Veil-specific creature rendering
 │
-├── assets/
-│   ├── models/                 # Blender source files (.blend)
-│   ├── exported/               # glTF/GLB exports for Babylon.js
-│   └── textures/               # Texture atlases
+├── server/src/
+│   ├── rooms/
+│   │   └── ExpeditionRoom.ts       # Veil expedition instance
+│   │
+│   └── database/
+│       └── veilSchema.ts           # Expedition records, pets, etc.
 │
-├── .vscode/
-│   └── settings.json           # Format on save, ESLint config
-│
-├── docker-compose.yml          # PostgreSQL for local dev
-├── eslint.config.mjs           # ESLint 9 flat config
-├── .prettierrc                 # Prettier formatting rules
-├── package.json                # Root workspace scripts
-├── pnpm-workspace.yaml
-├── CLAUDE.md                   # AI assistant instructions
-├── PLAN.md                     # This file - development roadmap
-└── README.md                   # Project documentation
+└── shared/src/
+    ├── veilCreatures.ts            # Veil creature definitions
+    ├── veilItems.ts                # Veil item definitions
+    ├── veilRifts.ts                # Rift locations
+    ├── expeditions.ts              # Expedition mechanics
+    ├── pets.ts                     # Pet definitions
+    │
+    └── towns/
+        ├── saltmere.ts             # Coastal town
+        ├── ironhold.ts             # Mining town
+        └── shadowfen.ts            # Swamp town
+```
+
+### Modified Files
+
+| File | Changes |
+|------|---------|
+| `client/src/Game.ts` | Add ShaderManager, DimensionManager |
+| `client/src/systems/TilemapRenderer.ts` | Support dual-world rendering, cel-shade materials |
+| `client/src/character/SimpleCharacter.ts` | Cel-shade materials, dimension variants |
+| `client/src/entities/NpcEntity.ts` | Cel-shade materials |
+| `client/src/entities/WorldObjectEntity.ts` | Cel-shade materials, Veil variants |
+| `client/src/App.tsx` | New panels, dimension state |
+| `client/src/ui/Sidebar.tsx` | New panel buttons |
+| `server/src/rooms/WorldRoom.ts` | Veil rift interactions, expedition triggers |
+| `shared/src/skills.ts` | Add Veilwalking, Crystallurgy, Binding |
+| `shared/src/items.ts` | Add Veil materials and equipment |
+| `shared/src/index.ts` | Export new modules |
+
+---
+
+## Visual Reference
+
+### Surface World Palette
+```
+Background:  #87CEEB (sky), #228B22 (grass), #8B4513 (wood)
+Characters:  Warm flesh tones, earth-toned clothing
+Outlines:    Dark brown/black, 2-3px thick
+Lighting:    Warm sunlight, 3-band quantization
+```
+
+### Veil Dimension Palette
+```
+Background:  #0a0a1a (void), #1a0a2e (deep purple)
+Terrain:     #2a1a4a (dark), #4a2a6a (mid), bioluminescent accents
+Glow colors: #00ffff (cyan), #ff00ff (magenta), #ffdd00 (gold)
+Crystals:    #aaffff (ice), #aa00ff (violet), #ffaa00 (amber)
+Outlines:    Glow-colored or none (ethereal feel)
+```
+
+### Transition Effect
+```
+Duration:    2 seconds
+Effect:      Screen ripple from center, color shift (warm→cool)
+Audio:       Low rumble, crystalline chime
+Particles:   Light motes flowing toward/away from player
 ```
 
 ---
 
-## Local Development
+## Success Metrics
 
-```bash
-# Install dependencies
-pnpm install
-
-# Start PostgreSQL
-docker-compose up -d
-
-# Start dev servers (client + server in parallel)
-pnpm dev
-
-# Client: http://localhost:5173
-# Server: ws://localhost:2567
-```
-
-### Available Scripts
-
-```bash
-pnpm dev              # Start client + server
-pnpm dev:client       # Start only client
-pnpm dev:server       # Start only server
-pnpm build            # Build all packages
-pnpm lint             # Run ESLint
-pnpm lint:fix         # Fix ESLint issues
-pnpm format           # Format with Prettier
-pnpm typecheck        # TypeScript type checking
-```
-
----
-
-## Key Technical Decisions
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Renderer | Babylon.js v8 | Full 3D engine, OSRS-style perspective camera |
-| UI Layer | React 19 | Modern, declarative UI overlays |
-| Multiplayer | Colyseus 0.17 | Best Node.js MMO framework |
-| Language | TypeScript 5.9 | Shared types client/server |
-| State sync | Messages + Schemas | Reliable initial state via messages |
-| Pathfinding | EasyStar.js | A* implementation for tilemaps |
-| Database | PostgreSQL + Drizzle | Type-safe ORM, reliable persistence |
-| Build | Vite 6 | Fast HMR, modern bundling |
-| Linting | ESLint 9 + Prettier | Consistent code style |
-| Package manager | pnpm | Fast, efficient, workspaces |
-| World building | Data-driven towns | TypeScript definitions, agentic design |
-| 3D assets | Blender → glTF | Free, fast iteration, native Babylon.js format |
-
----
-
-## Research Sources
-
-- [OSRS Skills Wiki](https://oldschool.runescape.wiki/w/Skills)
-- [PixiJS vs Phaser Comparison](https://dev.to/ritza/phaser-vs-pixijs-for-making-2d-games-2j8c)
-- [Colyseus Framework](https://colyseus.io/)
-- [2D Sprite Trends 2025](https://pixelfindr.io/blog/why-2d-isn-t-dead-trending-sprite-styles-to-watch-in-2025-meshy-ai)
-- [Procedural World Generation](https://rancic.org/blog/world-proc-gen/)
-- [Socket.io + Redis Architecture](https://dev.to/dowerdev/building-a-real-time-multiplayer-game-server-with-socketio-and-redis-architecture-and-583m)
+1. **Visual Distinctiveness**: Screenshots/clips are immediately recognizable
+2. **Gameplay Hook**: Players actively anticipate Veil expeditions
+3. **Shareability**: Clip tool used frequently, Discord/social sharing
+4. **Retention**: Dual progression (surface + Veil) maintains engagement
+5. **Performance**: 60fps on mid-range hardware with effects enabled
 
 ---
 
 ## Current Status
 
-**Phases 1-8.5 Complete** - Full combat system, 3D terrain, town system, first town (Thornwick), equipment system, and procedural character system with performance optimizations.
+**Completed (Previous Phases):**
+- Core multiplayer infrastructure
+- 23-skill system with XP progression
+- Inventory and banking
+- Combat system with NPCs
+- 3D terrain with height levels
+- First town (Thornwick)
+- Equipment system with visual gear
+- Procedural character system
+- Engagement features (XP tracker, achievements, daily challenges)
 
-**Next: Phase 8.6 (Combat Polish)** - Add HP regen, player damage feedback, then Phase 8.7 (Mining & Smithing).
-
-### Thornwick Town (Phase 7)
-- 48x48 tile medieval market town with perimeter walls
-- 5 buildings: Keep, Bank, General Store, Blacksmith, Inn
-- Passive GUARD NPCs at gates and keep (won't attack players)
-- Central marketplace with fountain and 4 colored market stalls
-- Torches throughout for atmospheric lighting
-- Decorative props: barrels, crates, benches, tables, hay bales, bushes, rocks, flower patches
-- Cooking fire in the inn, anvil at blacksmith
-- Fishing pond with willow tree
-
-### Combat System (Phase 5)
-- NPCs: Chicken (lvl 1), Cow (lvl 2), Giant Rat (lvl 3), Goblin (lvl 5 aggressive), Guard (lvl 21 passive)
-- Click NPC to walk adjacent and auto-attack
-- OSRS-style damage formulas (accuracy roll vs defence roll)
-- XP: 4 per damage to combat skill + 1.33 HP XP
-- Combat styles: Accurate (Attack), Aggressive (Strength), Defensive (Defence)
-- NPC health bars always visible
-- Hit splats show damage numbers on NPCs
-- Loot drops on kill (bones, raw meat, feathers, coins, equipment)
-- Right-click food to eat and heal
-- Respawn: NPCs after timer, players at spawn point
-
-### Equipment System (Phase 8)
-- 7 slots: head, body, legs, feet, hands, weapon, offhand
-- Bronze/Iron/Steel tiers with level requirements
-- Equipment bonuses affect combat (attack, strength, defence)
-- Visual equipment meshes on player models
-- Equipment synced to remote players
-- Goblins drop bronze gear, Guards drop iron gear
-- Weapons stall sells bronze equipment
-
-### Procedural Character System (Phase 8.5)
-- SimpleCharacter class using TransformNode hierarchy (no GLB models)
-- Joint-based animation system with walk cycle and idle poses
-- OSRS-style chunky aesthetic with gaps at joints (waist, shoulders)
-- Equipment meshes attach to specific joints (weapon to hand, helmet to head)
-- Performance optimizations: mesh instancing, freezeWorldMatrix for static objects
-- Memory leak fixes in dispose() methods
-
-### 3D Terrain (Phase 5.5)
-- Babylon.js perspective camera (OSRS-style angle)
-- Height map with plateaus and cliffs
-- Auto-generated cliff faces between levels
-- Height-aware pathfinding (can't climb > 1 level)
-- Q/E keys rotate camera 45°
-- All entities positioned at correct Y height
-
-### NPC Locations (Thornwick)
-| NPC | Location | Notes |
-|-----|----------|-------|
-| Guard x2 | South gate (22,44), (26,44) | Passive, patrol gate area |
-| Guard x2 | Keep entrance (22,14), (26,14) | Passive, patrol keep |
-| Chicken x2 | Near inn (38,40), (40,42) | Easy combat |
-| Giant Rat x1 | Southwest alley (6,40) | Medium combat |
-
-### World Objects (Thornwick)
-| Object | Location | Purpose |
-|--------|----------|---------|
-| Fountain | Central marketplace (24,26) | Decorative centerpiece |
-| Market Stalls x4 | Around marketplace | Red, blue, green, yellow awnings |
-| Torches x8 | Gates, keep, bank, marketplace | Atmospheric lighting |
-| Anvil | Blacksmith exterior (13,33) | Future smithing |
-| Cooking Fire | Inside inn (38,34) | Cooking skill |
-| Bank Booth | Inside bank (40,20) | Banking |
-| Fishing Spot | Pond (6,44) | Fishing skill |
-
-## Next Steps
-
-1. **Phase 8.6: Combat Polish** (Priority)
-   - Add HP regeneration (1 HP per minute out of combat)
-   - Add player hit splats when taking damage
-   - Add screen flash effect on damage
-   - Add Hobgoblin NPC (lvl 28) for steel drops
-   - Add Black Knight NPC (lvl 33) for rare steel armor
-
-2. **Phase 8.7: Mining & Smithing**
-   - Mining skill (rocks → ore)
-   - Smithing skill (ore → bar → item at anvil)
-   - Add ore rocks outside town walls
-   - Implement furnace for smelting
-   - Create goblin camp with hobgoblins
-
-3. **Expand Thornwick** (Content)
-   - Add tutorial NPC with dialogue
-   - Add mining rocks outside town walls
-   - Create cow field and goblin camp outside walls
-   - Add ambient townsfolk NPCs
-
-4. **Phase 9: Second Town**
-   - Design and implement a second town
-   - Zone transitions between areas
-   - Different biome/theme (coastal port or mountain village)
+**Next Steps:**
+1. Phase 0.1: Create ShaderManager
+2. Phase 0.2: Implement cel-shading
+3. Phase 0.3: Post-processing pipeline
+4. Phase 1.1: Apply to terrain
+5. Phase 1.2: Apply to characters
 
 ---
 
-## Asset Pipeline
+## Notes
 
-### World Building Workflow (Data-Driven Towns)
-```
-1. Design → Describe town layout, buildings, NPCs at high level
-2. Define → Create TypeScript town definition file
-3. Iterate → Adjust coordinates, add buildings, place objects
-4. Test → Load game, verify layout, refine
-```
-
-Towns are defined in `packages/shared/src/towns/` as TypeScript data files.
-The WorldGenerator applies town data during chunk generation.
-
-### 3D Assets (Blender → Babylon.js)
-- Model in Blender (free, fast iteration)
-- Export as glTF/GLB (native Babylon.js format)
-- OSRS-style chunky low-poly aesthetic
-- Modular building kits: walls, corners, roofs, doors, windows
-- Snap to tile grid in Blender
-- One material style per biome (no mixing PBR with flat low-poly)
-
-### Textures & UI
-- Krita or Aseprite depending on style
-- Lock consistent palette before production
-- AI useful for concept/iteration, then clean up manually
-
-### AI Usage That Saves Time
-Use Claude/Codex to generate:
-- Drop tables, XP curves, item definitions from templates
-- Quest step graphs (tiny DSL) and reward tables
-- Town layout drafts as data ("place 12 houses along road, add plaza")
-- Deterministic procedural decoration (same seed = same clutter everywhere)
-
-Do NOT use AI to skip the pipeline. Use it to crank content through the pipeline.
-
-### Avoiding "Roblox Feel"
-Common problems:
-- Inconsistent scale
-- Shiny/default materials
-- No strong silhouettes/landmarks
-- No disciplined palette
-- Buildings not modular / not snapped / not readable
-
-Fix by:
-1. Greybox first, lock scale
-2. Make modular building kit in Blender
-3. Replace greyboxes with kit pieces (grid-snapped)
-4. One lighting setup + fog + low specular across whole scene
+- All visuals achievable in Babylon.js without external 3D models
+- Shaders use GLSL (Babylon.js Effect system) or Node Material
+- Performance priority: target 60fps with effects
+- Mobile considerations: reduce particle counts, simpler shaders
+- Accessibility: option to reduce/disable screen effects

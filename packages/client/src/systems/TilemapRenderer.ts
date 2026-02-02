@@ -9,6 +9,7 @@ import {
 } from '@babylonjs/core'
 import { CHUNK_SIZE, TILE_SIZE, TileType, WALKABLE_TILES, getChunkKey } from '@realm/shared'
 import type { ChunkData, ChunkKey } from '@realm/shared'
+import { ShaderManager } from './ShaderManager'
 
 // Tile colors (RGB normalized 0-1)
 const TILE_COLORS: Record<TileType, { r: number; g: number; b: number }> = {
@@ -32,11 +33,24 @@ export class TilemapRenderer {
   private chunks: Map<ChunkKey, { data: ChunkData; meshes: AbstractMesh[] }> = new Map()
   private pickableMeshes: Mesh[] = []
   private baseMeshes: Map<TileType, Mesh> = new Map()
+  private useCelShading: boolean = true
 
   constructor(scene: Scene) {
     this.scene = scene
     this.worldWidth = 0
     this.worldHeight = 0
+  }
+
+  /**
+   * Enable or disable cel-shading for terrain
+   */
+  setCelShading(enabled: boolean): void {
+    if (this.useCelShading === enabled) return
+    this.useCelShading = enabled
+
+    // Clear base meshes to force recreation with new material type
+    this.baseMeshes.forEach((mesh) => mesh.dispose())
+    this.baseMeshes.clear()
   }
 
   async init() {
@@ -45,6 +59,15 @@ export class TilemapRenderer {
 
   private ensureBaseMeshes() {
     if (this.baseMeshes.size > 0) return
+
+    // Get shader manager for cel-shading (may not be initialized yet on first load)
+    let shaderManager: ShaderManager | null = null
+    try {
+      shaderManager = ShaderManager.getInstance()
+      console.log('[TilemapRenderer] ShaderManager found, cel-shading enabled:', this.useCelShading)
+    } catch (e) {
+      console.warn('[TilemapRenderer] ShaderManager not available, using standard materials', e)
+    }
 
     for (const tileType of Object.values(TileType).filter(
       (v) => typeof v === 'number'
@@ -55,11 +78,28 @@ export class TilemapRenderer {
         this.scene
       )
       const color = TILE_COLORS[tileType as TileType]
-      const mat = new StandardMaterial(`tileMat_${tileType}_base`, this.scene)
-      mat.diffuseColor = new Color3(color.r, color.g, color.b)
-      mat.specularColor = Color3.Black()
-      mat.freeze() // Freeze material for performance
-      mesh.material = mat
+      const colorVec = new Color3(color.r, color.g, color.b)
+
+      // Use cel-shading if enabled and shader manager is available
+      if (this.useCelShading && shaderManager) {
+        console.log('[TilemapRenderer] ✓ Creating cel-shade material for tile type:', tileType, TileType[tileType])
+        const mat = shaderManager.createCelShadeMaterial(`terrain_${tileType}`, colorVec, {
+          bands: 4,  // More bands for terrain variation
+          ambientIntensity: 0.12,  // Lower ambient = more contrast
+          highlightColor: new Color3(1.4, 1.35, 1.15),  // Warm bright highlights
+          shadowColor: new Color3(0.2, 0.18, 0.3)      // Cool dark shadows
+        })
+        mesh.material = mat
+      } else {
+        console.log('[TilemapRenderer] Using standard material for tile type:', tileType)
+        // Fallback to standard material
+        const mat = new StandardMaterial(`tileMat_${tileType}_base`, this.scene)
+        mat.diffuseColor = colorVec
+        mat.specularColor = Color3.Black()
+        mat.freeze()
+        mesh.material = mat
+      }
+
       mesh.isPickable = true
       mesh.isVisible = false
       mesh.metadata = { terrainType: 'tile' }
@@ -120,10 +160,30 @@ export class TilemapRenderer {
   }
 
   private buildCliffMeshes(chunk: ChunkData): Mesh {
-    const cliffMat = new StandardMaterial(`cliffMat_${chunk.chunkX}_${chunk.chunkY}`, this.scene)
-    cliffMat.diffuseColor = new Color3(0.35, 0.35, 0.35)
-    cliffMat.specularColor = Color3.Black()
-    cliffMat.freeze() // Freeze material for performance
+    // Get shader manager for cel-shading
+    let shaderManager: ShaderManager | null = null
+    try {
+      shaderManager = ShaderManager.getInstance()
+    } catch {
+      // Shader manager not initialized yet
+    }
+
+    const cliffColor = new Color3(0.35, 0.35, 0.35)
+    let cliffMat
+
+    if (this.useCelShading && shaderManager) {
+      cliffMat = shaderManager.createCelShadeMaterial(`cliff_${chunk.chunkX}_${chunk.chunkY}`, cliffColor, {
+        bands: 3,
+        ambientIntensity: 0.15,
+        highlightColor: new Color3(1.3, 1.3, 1.2),
+        shadowColor: new Color3(0.2, 0.2, 0.25)
+      })
+    } else {
+      cliffMat = new StandardMaterial(`cliffMat_${chunk.chunkX}_${chunk.chunkY}`, this.scene)
+      cliffMat.diffuseColor = cliffColor
+      cliffMat.specularColor = Color3.Black()
+      cliffMat.freeze()
+    }
 
     const faceMesh = MeshBuilder.CreateBox(
       `cliffFace_${chunk.chunkX}_${chunk.chunkY}`,

@@ -15,7 +15,11 @@ import { Notifications, useNotifications } from './ui/Notifications'
 import { LoadingScreen } from './ui/LoadingScreen'
 import { HealthBar } from './ui/HealthBar'
 import { Sidebar, PanelType } from './ui/Sidebar'
-import { ItemType } from '@realm/shared'
+import { XpTracker } from './ui/XpTracker'
+import { DailyChallengesPanel } from './ui/DailyChallengesPanel'
+import { AchievementsPanel } from './ui/AchievementsPanel'
+import { ExpeditionPanel, ExpeditionState } from './ui/ExpeditionPanel'
+import { ItemType, DailyChallengesData, AchievementType } from '@realm/shared'
 
 export function App() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -66,6 +70,20 @@ export function App() {
     defenceBonus: number
   }>({ attackBonus: 0, strengthBonus: 0, defenceBonus: 0 })
 
+  // Daily challenges state
+  const [dailyChallenges, setDailyChallenges] = useState<DailyChallengesData | null>(null)
+
+  // Achievements state
+  const [achievements, setAchievements] = useState<AchievementType[]>([])
+  const [playerStats, setPlayerStats] = useState<Record<string, number>>({})
+  const [cosmetics, setCosmetics] = useState<{ activeTitle: string | null; activeBadge: string | null }>({
+    activeTitle: null,
+    activeBadge: null
+  })
+
+  // Expedition state
+  const [expedition, setExpedition] = useState<ExpeditionState | null>(null)
+
   // Store selected item index in ref for use in callbacks
   const selectedItemIndexRef = useRef<number | null>(null)
   useEffect(() => {
@@ -105,6 +123,9 @@ export function App() {
         throw error
       }
       gameRef.current = game
+
+      // Expose game globally for debugging/testing Veil transition
+      ;(window as any).game = game
 
       // Initialize network
       setLoadingStatus('Connecting to server...')
@@ -282,6 +303,122 @@ export function App() {
         setEquipmentBonuses({ ...bonuses })
       }
 
+      // Daily challenges
+      network.onDailyChallengesData = (data) => {
+        setDailyChallenges(data)
+      }
+
+      network.onChallengeProgress = (challengeIndex, progress, completed) => {
+        setDailyChallenges((prev) => {
+          if (!prev) return prev
+          const newChallenges = [...prev.challenges]
+          if (newChallenges[challengeIndex]) {
+            newChallenges[challengeIndex] = {
+              ...newChallenges[challengeIndex],
+              progress,
+              completed
+            }
+          }
+          return { ...prev, challenges: newChallenges }
+        })
+      }
+
+      network.onChallengeRewardClaimed = (challengeIndex, rewardXp, rewardSkill, rewardCoins) => {
+        setDailyChallenges((prev) => {
+          if (!prev) return prev
+          const newChallenges = [...prev.challenges]
+          if (newChallenges[challengeIndex]) {
+            newChallenges[challengeIndex] = {
+              ...newChallenges[challengeIndex],
+              claimed: true
+            }
+          }
+          return { ...prev, challenges: newChallenges }
+        })
+        if (rewardXp && rewardSkill) {
+          showXpGainRef.current(rewardSkill, rewardXp)
+        } else if (rewardCoins) {
+          setMessages((prev) => [
+            ...prev.slice(-50),
+            { sender: 'System', text: `Challenge reward: +${rewardCoins} coins` }
+          ])
+        }
+      }
+
+      // Achievements
+      network.onAchievementsData = (achievementList, stats, cosmeticsData) => {
+        setAchievements(achievementList)
+        setPlayerStats(stats)
+        setCosmetics(cosmeticsData)
+      }
+
+      network.onAchievementUnlocked = (achievementType) => {
+        setAchievements((prev) => [...prev, achievementType])
+        setMessages((prev) => [
+          ...prev.slice(-50),
+          { sender: 'System', text: `Achievement unlocked: ${achievementType}!` }
+        ])
+      }
+
+      network.onCosmeticsUpdated = (cosmeticsData) => {
+        setCosmetics(cosmeticsData)
+      }
+
+      // Expedition callbacks
+      network.onExpeditionStart = (data) => {
+        setExpedition({
+          id: data.id,
+          riftId: data.riftId,
+          tier: data.tier,
+          tierName: data.tierName,
+          maxDuration: data.maxDuration,
+          maxStability: data.maxStability,
+          currentStability: data.currentStability,
+          stabilityDrainRate: data.stabilityDrainRate,
+          timeRemaining: data.maxDuration
+        })
+        setMessages((prev) => [
+          ...prev.slice(-50),
+          { sender: 'System', text: `Entered ${data.tierName}. Extract before your stability depletes!` }
+        ])
+        // Trigger visual transition to Veil dimension
+        gameRef.current?.enterVeil()
+      }
+
+      network.onExpeditionUpdate = (currentStability, timeRemaining) => {
+        setExpedition((prev) => {
+          if (!prev) return null
+          return { ...prev, currentStability, timeRemaining }
+        })
+      }
+
+      network.onExpeditionEnd = (data) => {
+        setExpedition(null)
+        const reason = data.reason === 'voluntary' ? 'Successfully extracted!' :
+                       data.reason === 'time_expired' ? 'Time expired - forced extraction!' :
+                       data.reason === 'stability_depleted' ? 'Stability depleted - forced extraction!' :
+                       'Overwhelmed - forced extraction!'
+        setMessages((prev) => [
+          ...prev.slice(-50),
+          { sender: 'System', text: `${reason} Gained ${data.veilwalkingXp} Veilwalking XP.` }
+        ])
+        // Trigger visual transition back to surface
+        gameRef.current?.exitVeil()
+        if (data.lostItems > 0) {
+          setMessages((prev) => [
+            ...prev.slice(-50),
+            { sender: 'System', text: `Lost ${data.lostItems} unsecured items.` }
+          ])
+        }
+      }
+
+      network.onStabilityDamage = (stabilityLost, currentStability) => {
+        setExpedition((prev) => {
+          if (!prev) return null
+          return { ...prev, currentStability }
+        })
+      }
+
       // Connect to server
       await network.connect()
 
@@ -353,6 +490,22 @@ export function App() {
     networkRef.current?.unequipItem(slot)
   }, [])
 
+  const handleClaimChallengeReward = useCallback((challengeIndex: number) => {
+    networkRef.current?.claimChallengeReward(challengeIndex)
+  }, [])
+
+  const handleSetActiveTitle = useCallback((title: string | null) => {
+    networkRef.current?.setActiveTitle(title)
+  }, [])
+
+  const handleSetActiveBadge = useCallback((badge: string | null) => {
+    networkRef.current?.setActiveBadge(badge)
+  }, [])
+
+  const handleExtractExpedition = useCallback(() => {
+    networkRef.current?.extractExpedition()
+  }, [])
+
   // Calculate player coins for shop
   const playerCoins = inventory.reduce((total, item) => {
     if (item.itemType === ItemType.COINS) {
@@ -385,8 +538,19 @@ export function App() {
           {/* Top center - Health bar */}
           <HealthBar currentHp={currentHp} maxHp={maxHp} />
 
+          {/* Expedition panel - shows when in Veil */}
+          {expedition && (
+            <ExpeditionPanel
+              expedition={expedition}
+              onExtract={handleExtractExpedition}
+            />
+          )}
+
           {/* Top left - Player list */}
           <PlayerList players={players} />
+
+          {/* Top left (below player list) - XP Tracker */}
+          <XpTracker skills={skills} />
 
           {/* Right side - Sidebar with Skills, Inventory, and Equipment panels */}
           <Sidebar activePanel={activePanel} onPanelChange={setActivePanel}>
@@ -406,6 +570,21 @@ export function App() {
                 equipment={equipment}
                 bonuses={equipmentBonuses}
                 onUnequipItem={handleUnequipItem}
+              />
+            )}
+            {activePanel === 'challenges' && (
+              <DailyChallengesPanel
+                challenges={dailyChallenges}
+                onClaimReward={handleClaimChallengeReward}
+              />
+            )}
+            {activePanel === 'achievements' && (
+              <AchievementsPanel
+                earnedAchievements={achievements}
+                playerStats={playerStats}
+                cosmetics={cosmetics}
+                onSetTitle={handleSetActiveTitle}
+                onSetBadge={handleSetActiveBadge}
               />
             )}
           </Sidebar>

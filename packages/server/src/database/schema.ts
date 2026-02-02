@@ -1,4 +1,13 @@
-import { pgTable, serial, varchar, integer, timestamp, unique } from 'drizzle-orm/pg-core'
+import {
+  pgTable,
+  serial,
+  varchar,
+  integer,
+  timestamp,
+  unique,
+  boolean,
+  date
+} from 'drizzle-orm/pg-core'
 
 export const players = pgTable('players', {
   id: serial('id').primaryKey(),
@@ -66,5 +75,67 @@ export const playerEquipment = pgTable(
   },
   (table) => ({
     playerSlotUnique: unique().on(table.playerId, table.slot)
+  })
+)
+
+// Stats tracking for achievements
+export const playerStats = pgTable(
+  'player_stats',
+  {
+    id: serial('id').primaryKey(),
+    playerId: integer('player_id')
+      .references(() => players.id, { onDelete: 'cascade' })
+      .notNull(),
+    statType: varchar('stat_type', { length: 50 }).notNull(),
+    value: integer('value').default(0).notNull()
+  },
+  (table) => ({
+    playerStatUnique: unique().on(table.playerId, table.statType)
+  })
+)
+
+// Earned achievements
+export const playerAchievements = pgTable(
+  'player_achievements',
+  {
+    id: serial('id').primaryKey(),
+    playerId: integer('player_id')
+      .references(() => players.id, { onDelete: 'cascade' })
+      .notNull(),
+    achievementType: varchar('achievement_type', { length: 50 }).notNull(),
+    earnedAt: timestamp('earned_at').defaultNow().notNull()
+  },
+  (table) => ({
+    playerAchievementUnique: unique().on(table.playerId, table.achievementType)
+  })
+)
+
+// Active cosmetics (title, badge)
+export const playerCosmetics = pgTable('player_cosmetics', {
+  id: serial('id').primaryKey(),
+  playerId: integer('player_id')
+    .references(() => players.id, { onDelete: 'cascade' })
+    .notNull()
+    .unique(),
+  activeTitle: varchar('active_title', { length: 50 }),
+  activeBadge: varchar('active_badge', { length: 50 })
+})
+
+// Daily challenge progress
+export const playerDailyChallenges = pgTable(
+  'player_daily_challenges',
+  {
+    id: serial('id').primaryKey(),
+    playerId: integer('player_id')
+      .references(() => players.id, { onDelete: 'cascade' })
+      .notNull(),
+    challengeDate: date('challenge_date').notNull(),
+    challengeIndex: integer('challenge_index').notNull(),
+    progress: integer('progress').default(0).notNull(),
+    completed: boolean('completed').default(false).notNull(),
+    claimed: boolean('claimed').default(false).notNull()
+  },
+  (table) => ({
+    playerChallengeDateUnique: unique().on(table.playerId, table.challengeDate, table.challengeIndex)
   })
 )

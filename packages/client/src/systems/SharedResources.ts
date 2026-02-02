@@ -14,9 +14,11 @@ import {
   Mesh,
   MeshBuilder,
   InstancedMesh,
-  TransformNode
+  TransformNode,
+  Material
 } from '@babylonjs/core'
 import { AdvancedDynamicTexture, TextBlock, Rectangle, Control } from '@babylonjs/gui'
+import { ShaderManager } from './ShaderManager'
 
 // Singleton instance
 let instance: SharedResources | null = null
@@ -24,13 +26,21 @@ let instance: SharedResources | null = null
 export class SharedResources {
   private scene: Scene
   private guiTexture: AdvancedDynamicTexture
-  private materials: Map<string, StandardMaterial> = new Map()
+  private materials: Map<string, Material> = new Map()
   private meshTemplates: Map<string, Mesh> = new Map()
+  private useCelShading: boolean = true
 
   private constructor(scene: Scene) {
     this.scene = scene
     // Single GUI texture for ALL entity labels
     this.guiTexture = AdvancedDynamicTexture.CreateFullscreenUI('sharedUI', true, scene)
+  }
+
+  /**
+   * Enable or disable cel-shading for all new materials
+   */
+  setCelShading(enabled: boolean): void {
+    this.useCelShading = enabled
   }
 
   static init(scene: Scene): SharedResources {
@@ -91,10 +101,54 @@ export class SharedResources {
 
   // ============ Material Management ============
 
-  getMaterial(name: string, color: Color3, options?: { emissive?: Color3; alpha?: number }): StandardMaterial {
-    const key = `${name}_${color.toHexString()}_${options?.alpha ?? 1}`
+  getMaterial(name: string, color: Color3, options?: { emissive?: Color3; alpha?: number }): Material {
+    const celPrefix = this.useCelShading ? 'cel_' : ''
+    const key = `${celPrefix}${name}_${color.toHexString()}_${options?.alpha ?? 1}`
 
     let mat = this.materials.get(key)
+    if (!mat) {
+      // Try to use cel-shading if enabled
+      if (this.useCelShading && !options?.emissive && (options?.alpha ?? 1) >= 1) {
+        try {
+          const shaderManager = ShaderManager.getInstance()
+          console.log('[SharedResources] ✓ Creating cel-shade material:', key)
+          mat = shaderManager.createCelShadeMaterial(key, color, {
+            bands: 3,  // 3 bands for visible stepping
+            ambientIntensity: 0.1,  // Low ambient for dramatic shadows
+            highlightColor: new Color3(1.5, 1.4, 1.2),  // Warm bright highlights
+            shadowColor: new Color3(0.2, 0.15, 0.3)     // Cool dark shadows
+          })
+          this.materials.set(key, mat)
+          return mat
+        } catch (e) {
+          console.warn('[SharedResources] ShaderManager not available, using standard material', e)
+        }
+      }
+
+      // Fallback to standard material
+      const stdMat = new StandardMaterial(key, this.scene)
+      stdMat.diffuseColor = color
+      stdMat.specularColor = Color3.Black()
+      if (options?.emissive) {
+        stdMat.emissiveColor = options.emissive
+      }
+      if (options?.alpha !== undefined) {
+        stdMat.alpha = options.alpha
+      }
+      stdMat.freeze() // Freeze material for performance
+      mat = stdMat
+      this.materials.set(key, mat)
+    }
+    return mat
+  }
+
+  /**
+   * Get a standard material (never cel-shaded) - use for special cases like emissives
+   */
+  getStandardMaterial(name: string, color: Color3, options?: { emissive?: Color3; alpha?: number }): StandardMaterial {
+    const key = `std_${name}_${color.toHexString()}_${options?.alpha ?? 1}`
+
+    let mat = this.materials.get(key) as StandardMaterial | undefined
     if (!mat) {
       mat = new StandardMaterial(key, this.scene)
       mat.diffuseColor = color
@@ -105,250 +159,250 @@ export class SharedResources {
       if (options?.alpha !== undefined) {
         mat.alpha = options.alpha
       }
-      mat.freeze() // Freeze material for performance
+      mat.freeze()
       this.materials.set(key, mat)
     }
     return mat
   }
 
   // Common materials (pre-cached)
-  get trunkMaterial(): StandardMaterial {
+  get trunkMaterial(): Material {
     return this.getMaterial('trunk', new Color3(0.36, 0.25, 0.2))
   }
 
-  get greenCanopyMaterial(): StandardMaterial {
+  get greenCanopyMaterial(): Material {
     return this.getMaterial('canopyGreen', new Color3(0.13, 0.55, 0.13))
   }
 
-  get oakCanopyMaterial(): StandardMaterial {
+  get oakCanopyMaterial(): Material {
     return this.getMaterial('canopyOak', new Color3(0.18, 0.55, 0.34))
   }
 
-  get willowCanopyMaterial(): StandardMaterial {
+  get willowCanopyMaterial(): Material {
     return this.getMaterial('canopyWillow', new Color3(0.42, 0.56, 0.14))
   }
 
-  get stumpMaterial(): StandardMaterial {
+  get stumpMaterial(): Material {
     return this.getMaterial('stump', new Color3(0.36, 0.25, 0.2))
   }
 
-  get stumpTopMaterial(): StandardMaterial {
+  get stumpTopMaterial(): Material {
     return this.getMaterial('stumpTop', new Color3(0.55, 0.45, 0.33))
   }
 
-  get waterMaterial(): StandardMaterial {
+  get waterMaterial(): Material {
     return this.getMaterial('water', new Color3(0.29, 0.56, 0.85), { alpha: 0.7 })
   }
 
-  get woodMaterial(): StandardMaterial {
+  get woodMaterial(): Material {
     return this.getMaterial('wood', new Color3(0.55, 0.35, 0.2))
   }
 
-  get darkWoodMaterial(): StandardMaterial {
+  get darkWoodMaterial(): Material {
     return this.getMaterial('darkWood', new Color3(0.4, 0.25, 0.15))
   }
 
-  get goldMaterial(): StandardMaterial {
+  get goldMaterial(): Material {
     return this.getMaterial('gold', new Color3(0.72, 0.53, 0.04), { emissive: new Color3(0.3, 0.22, 0.02) })
   }
 
-  get flameMaterial(): StandardMaterial {
+  get flameMaterial(): Material {
     return this.getMaterial('flame', new Color3(1, 0.27, 0), { emissive: new Color3(1, 0.4, 0.1), alpha: 0.9 })
   }
 
-  get innerFlameMaterial(): StandardMaterial {
+  get innerFlameMaterial(): Material {
     return this.getMaterial('innerFlame', new Color3(1, 0.8, 0), { emissive: new Color3(1, 0.9, 0.3) })
   }
 
   // NPC materials
-  get chickenMaterial(): StandardMaterial {
+  get chickenMaterial(): Material {
     return this.getMaterial('chicken', new Color3(1, 1, 0.9))
   }
 
-  get chickenBeakMaterial(): StandardMaterial {
+  get chickenBeakMaterial(): Material {
     return this.getMaterial('chickenBeak', new Color3(1, 0.6, 0))
   }
 
-  get chickenCombMaterial(): StandardMaterial {
+  get chickenCombMaterial(): Material {
     return this.getMaterial('chickenComb', new Color3(0.9, 0.1, 0.1))
   }
 
-  get cowMaterial(): StandardMaterial {
+  get cowMaterial(): Material {
     return this.getMaterial('cow', new Color3(0.3, 0.2, 0.1))
   }
 
-  get cowHeadMaterial(): StandardMaterial {
+  get cowHeadMaterial(): Material {
     return this.getMaterial('cowHead', new Color3(0.35, 0.25, 0.15))
   }
 
-  get cowSpotMaterial(): StandardMaterial {
+  get cowSpotMaterial(): Material {
     return this.getMaterial('cowSpot', new Color3(1, 1, 1))
   }
 
-  get goblinMaterial(): StandardMaterial {
+  get goblinMaterial(): Material {
     return this.getMaterial('goblin', new Color3(0.2, 0.7, 0.2))
   }
 
-  get goblinDarkMaterial(): StandardMaterial {
+  get goblinDarkMaterial(): Material {
     return this.getMaterial('goblinDark', new Color3(0.15, 0.5, 0.15))
   }
 
-  get ratMaterial(): StandardMaterial {
+  get ratMaterial(): Material {
     return this.getMaterial('rat', new Color3(0.4, 0.35, 0.3))
   }
 
-  get ratTailMaterial(): StandardMaterial {
+  get ratTailMaterial(): Material {
     return this.getMaterial('ratTail', new Color3(0.7, 0.6, 0.5))
   }
 
-  get guardArmorMaterial(): StandardMaterial {
+  get guardArmorMaterial(): Material {
     return this.getMaterial('guardArmor', new Color3(0.6, 0.6, 0.65))
   }
 
-  get guardChainmailMaterial(): StandardMaterial {
+  get guardChainmailMaterial(): Material {
     return this.getMaterial('guardChainmail', new Color3(0.5, 0.5, 0.55))
   }
 
-  get guardHelmetMaterial(): StandardMaterial {
+  get guardHelmetMaterial(): Material {
     return this.getMaterial('guardHelmet', new Color3(0.55, 0.55, 0.6))
   }
 
-  get defaultNpcMaterial(): StandardMaterial {
+  get defaultNpcMaterial(): Material {
     return this.getMaterial('defaultNpc', new Color3(0.5, 0.5, 0.5))
   }
 
   // Player materials
-  get playerBodyMaterial(): StandardMaterial {
+  get playerBodyMaterial(): Material {
     return this.getMaterial('playerBody', new Color3(0.15, 0.15, 0.16))
   }
 
-  get playerSkinMaterial(): StandardMaterial {
+  get playerSkinMaterial(): Material {
     return this.getMaterial('playerSkin', new Color3(0.96, 0.82, 0.66))
   }
 
-  get actionIndicatorMaterial(): StandardMaterial {
+  get actionIndicatorMaterial(): Material {
     return this.getMaterial('actionIndicator', new Color3(0.72, 0.53, 0.04), { alpha: 0.8 })
   }
 
   // Market stall awning materials
-  get redAwningMaterial(): StandardMaterial {
+  get redAwningMaterial(): Material {
     return this.getMaterial('redAwning', new Color3(0.8, 0.15, 0.15))
   }
 
-  get blueAwningMaterial(): StandardMaterial {
+  get blueAwningMaterial(): Material {
     return this.getMaterial('blueAwning', new Color3(0.15, 0.35, 0.8))
   }
 
-  get greenAwningMaterial(): StandardMaterial {
+  get greenAwningMaterial(): Material {
     return this.getMaterial('greenAwning', new Color3(0.15, 0.6, 0.2))
   }
 
-  get yellowAwningMaterial(): StandardMaterial {
+  get yellowAwningMaterial(): Material {
     return this.getMaterial('yellowAwning', new Color3(0.9, 0.75, 0.1))
   }
 
   // Building materials
-  get stoneMaterial(): StandardMaterial {
+  get stoneMaterial(): Material {
     return this.getMaterial('stone', new Color3(0.5, 0.5, 0.52))
   }
 
-  get darkStoneMaterial(): StandardMaterial {
+  get darkStoneMaterial(): Material {
     return this.getMaterial('darkStone', new Color3(0.35, 0.35, 0.37))
   }
 
-  get ironMaterial(): StandardMaterial {
+  get ironMaterial(): Material {
     return this.getMaterial('iron', new Color3(0.45, 0.45, 0.5))
   }
 
-  get hayMaterial(): StandardMaterial {
+  get hayMaterial(): Material {
     return this.getMaterial('hay', new Color3(0.85, 0.75, 0.4))
   }
 
   // Flower materials
-  get flowerRedMaterial(): StandardMaterial {
+  get flowerRedMaterial(): Material {
     return this.getMaterial('flowerRed', new Color3(0.9, 0.2, 0.25))
   }
 
-  get flowerYellowMaterial(): StandardMaterial {
+  get flowerYellowMaterial(): Material {
     return this.getMaterial('flowerYellow', new Color3(1, 0.85, 0.2))
   }
 
-  get flowerPinkMaterial(): StandardMaterial {
+  get flowerPinkMaterial(): Material {
     return this.getMaterial('flowerPink', new Color3(1, 0.5, 0.7))
   }
 
   // Nature materials
-  get bushMaterial(): StandardMaterial {
+  get bushMaterial(): Material {
     return this.getMaterial('bush', new Color3(0.2, 0.45, 0.15))
   }
 
-  get rockMaterial(): StandardMaterial {
+  get rockMaterial(): Material {
     return this.getMaterial('rock', new Color3(0.55, 0.52, 0.48))
   }
 
   // Ore vein materials
-  get copperVeinMaterial(): StandardMaterial {
+  get copperVeinMaterial(): Material {
     return this.getMaterial('copperVein', new Color3(0.72, 0.45, 0.2))
   }
 
-  get tinVeinMaterial(): StandardMaterial {
+  get tinVeinMaterial(): Material {
     return this.getMaterial('tinVein', new Color3(0.75, 0.75, 0.78))
   }
 
-  get ironVeinMaterial(): StandardMaterial {
+  get ironVeinMaterial(): Material {
     return this.getMaterial('ironVein', new Color3(0.55, 0.35, 0.25))
   }
 
-  get coalVeinMaterial(): StandardMaterial {
+  get coalVeinMaterial(): Material {
     return this.getMaterial('coalVein', new Color3(0.15, 0.15, 0.18))
   }
 
   // Fabric/leather materials
-  get fabricMaterial(): StandardMaterial {
+  get fabricMaterial(): Material {
     return this.getMaterial('fabric', new Color3(0.85, 0.8, 0.7))
   }
 
-  get leatherMaterial(): StandardMaterial {
+  get leatherMaterial(): Material {
     return this.getMaterial('leather', new Color3(0.55, 0.4, 0.25))
   }
 
   // Ruins materials
-  get oldStoneMaterial(): StandardMaterial {
+  get oldStoneMaterial(): Material {
     return this.getMaterial('oldStone', new Color3(0.45, 0.43, 0.4))
   }
 
   // Bone material
-  get boneMaterial(): StandardMaterial {
+  get boneMaterial(): Material {
     return this.getMaterial('bone', new Color3(0.9, 0.88, 0.82))
   }
 
   // Equipment materials - by tier
-  get bronzeEquipmentMaterial(): StandardMaterial {
+  get bronzeEquipmentMaterial(): Material {
     return this.getMaterial('bronzeEquip', new Color3(0.8, 0.5, 0.2))
   }
 
-  get ironEquipmentMaterial(): StandardMaterial {
+  get ironEquipmentMaterial(): Material {
     return this.getMaterial('ironEquip', new Color3(0.55, 0.55, 0.6))
   }
 
-  get steelEquipmentMaterial(): StandardMaterial {
+  get steelEquipmentMaterial(): Material {
     return this.getMaterial('steelEquip', new Color3(0.7, 0.75, 0.85))
   }
 
-  get woodenEquipmentMaterial(): StandardMaterial {
+  get woodenEquipmentMaterial(): Material {
     return this.getMaterial('woodenEquip', new Color3(0.6, 0.45, 0.25))
   }
 
-  get leatherEquipmentMaterial(): StandardMaterial {
+  get leatherEquipmentMaterial(): Material {
     return this.getMaterial('leatherEquip', new Color3(0.5, 0.35, 0.2))
   }
 
   // Mushroom materials
-  get mushroomRedMaterial(): StandardMaterial {
+  get mushroomRedMaterial(): Material {
     return this.getMaterial('mushroomRed', new Color3(0.85, 0.15, 0.1))
   }
 
-  get mushroomBrownMaterial(): StandardMaterial {
+  get mushroomBrownMaterial(): Material {
     return this.getMaterial('mushroomBrown', new Color3(0.55, 0.4, 0.25))
   }
 

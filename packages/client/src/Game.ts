@@ -23,6 +23,9 @@ import { Camera } from './systems/Camera'
 import { Pathfinding } from './systems/Pathfinding'
 import { SharedResources } from './systems/SharedResources'
 import { AssetManager } from './systems/AssetManager'
+import { ShaderManager } from './systems/ShaderManager'
+import { PostProcessManager } from './systems/PostProcessManager'
+import { EnvironmentEffects } from './systems/EnvironmentEffects'
 import { worldToTile, tileToWorld, WorldObjectType, NpcType, TILE_SIZE, EquipmentSlot, ItemType } from '@realm/shared'
 import type { Position, Direction, ChunkData } from '@realm/shared'
 
@@ -38,6 +41,10 @@ export class Game {
   private camera!: Camera
   private pathfinding!: Pathfinding
   private sharedResources!: SharedResources
+  private shaderManager!: ShaderManager
+  private postProcessManager!: PostProcessManager
+  private environmentEffects!: EnvironmentEffects
+  private currentDimension: 'surface' | 'veil' = 'surface'
   private lastTime: number = 0
   private rotationStep: number = Math.PI / 2
   private hoveredObjectId: string | null = null
@@ -142,6 +149,19 @@ export class Game {
     // Add ambient lighting
     const light = new HemisphericLight('light', new Vector3(0.5, 1, 0.5), this.scene)
     light.intensity = 1.0
+
+    // Initialize shader and post-processing systems
+    this.shaderManager = ShaderManager.init(this.scene)
+    this.postProcessManager = PostProcessManager.init(this.scene, this.arcCamera)
+
+    // Setup default post-processing (surface world config)
+    this.postProcessManager.addGlowLayer(0.3)
+    this.postProcessManager.addVignette(1.2)
+    this.postProcessManager.applySurfaceConfig()
+
+    // Initialize environment effects (fog, particles)
+    this.environmentEffects = EnvironmentEffects.init(this.scene)
+    this.environmentEffects.setup()
 
     await this.initSystems()
     await this.initPlayer()
@@ -736,7 +756,18 @@ export class Game {
     this.engine.runRenderLoop(() => {
       const currentTime = performance.now()
       const delta = (currentTime - this.lastTime) / 16.67 // Normalize to 60fps
+      const deltaSeconds = (currentTime - this.lastTime) / 1000
       this.lastTime = currentTime
+
+      // Update shader time uniforms
+      this.shaderManager.update(deltaSeconds)
+      this.postProcessManager.update(deltaSeconds)
+      this.environmentEffects.update(deltaSeconds)
+
+      // Update particle position to follow player
+      this.environmentEffects.updateParticlePosition(
+        new Vector3(this.player.position.x, 0, this.player.position.y)
+      )
 
       this.player.update(delta)
 
@@ -817,7 +848,57 @@ export class Game {
     window.removeEventListener('keyup', this.handleKeyUp)
     this.hoverIndicator?.dispose()
     this.sharedResources?.dispose()
+    this.shaderManager?.dispose()
+    this.postProcessManager?.dispose()
+    this.environmentEffects?.dispose()
     this.engine.dispose()
+  }
+
+  /**
+   * Get the shader manager for creating custom materials
+   */
+  getShaderManager(): ShaderManager {
+    return this.shaderManager
+  }
+
+  /**
+   * Get the post-process manager for effects
+   */
+  getPostProcessManager(): PostProcessManager {
+    return this.postProcessManager
+  }
+
+  /**
+   * Transition to the Veil dimension (visual effects)
+   */
+  async enterVeil(): Promise<void> {
+    if (this.currentDimension === 'veil') return
+
+    await this.postProcessManager.playVeilTransition(true, 2000)
+    this.currentDimension = 'veil'
+    this.postProcessManager.applyVeilConfig()
+    this.environmentEffects.setMode('veil')
+    // Future: switch tilemap renderer mode, swap entities, etc.
+  }
+
+  /**
+   * Transition back to the surface world (visual effects)
+   */
+  async exitVeil(): Promise<void> {
+    if (this.currentDimension === 'surface') return
+
+    await this.postProcessManager.playVeilTransition(false, 2000)
+    this.currentDimension = 'surface'
+    this.postProcessManager.applySurfaceConfig()
+    this.environmentEffects.setMode('surface')
+    // Future: switch tilemap renderer mode, swap entities, etc.
+  }
+
+  /**
+   * Get current dimension
+   */
+  getCurrentDimension(): 'surface' | 'veil' {
+    return this.currentDimension
   }
 
   private createHoverIndicator() {

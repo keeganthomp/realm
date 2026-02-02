@@ -3,7 +3,8 @@ import {
   TransformNode,
   MeshBuilder,
   Mesh,
-  InstancedMesh
+  InstancedMesh,
+  Color3
 } from '@babylonjs/core'
 import { TextBlock } from '@babylonjs/gui'
 import { WorldObjectType, WORLD_OBJECT_DEFINITIONS, TILE_SIZE } from '@realm/shared'
@@ -202,6 +203,30 @@ export class WorldObjectEntity {
         break
       case WorldObjectType.MINE_ENTRANCE:
         this.createMineEntrance()
+        break
+      // Veil dimension
+      case WorldObjectType.VEIL_RIFT:
+        this.createVeilRift()
+        break
+      case WorldObjectType.VEIL_CRYSTAL:
+        this.createVeilCrystal()
+        break
+      case WorldObjectType.VEIL_TOUCHED_PLANT:
+        this.createVeilTouchedPlant()
+        break
+      case WorldObjectType.WARDEN_MONUMENT:
+        this.createWardenMonument()
+        break
+
+      // Signs and lore
+      case WorldObjectType.TOWN_SIGN:
+        this.createTownSign()
+        break
+      case WorldObjectType.LORE_PLAQUE:
+        this.createLorePlaque()
+        break
+      case WorldObjectType.NOTICE_BOARD:
+        this.createNoticeBoard()
         break
     }
   }
@@ -1673,6 +1698,477 @@ export class WorldObjectEntity {
       board.parent = this.node
       this.meshes.push(board)
     }
+  }
+
+  // ============ VEIL DIMENSION ============
+  private createVeilRift() {
+    const res = SharedResources.get()
+
+    // Outer ring frame - dark ethereal stone
+    const outerRing = MeshBuilder.CreateTorus(
+      'riftOuter_' + this.id,
+      { diameter: 1.2, thickness: 0.12, tessellation: 24 },
+      this.scene
+    )
+    outerRing.material = res.darkStoneMaterial
+    outerRing.position.y = 0.7
+    outerRing.parent = this.node
+    this.meshes.push(outerRing)
+
+    // Inner portal disc - glowing purple/cyan
+    const portalMat = res.getStandardMaterial('veilPortal',
+      new Color3(0.4, 0.2, 0.8),
+      { emissive: new Color3(0.3, 0.5, 1.0), alpha: 0.7 }
+    )
+
+    const portal = MeshBuilder.CreateDisc(
+      'riftPortal_' + this.id,
+      { radius: 0.5, tessellation: 24 },
+      this.scene
+    )
+    portal.material = portalMat
+    portal.position.y = 0.7
+    portal.parent = this.node
+    this.meshes.push(portal)
+
+    // Back side of portal
+    const portalBack = MeshBuilder.CreateDisc(
+      'riftPortalBack_' + this.id,
+      { radius: 0.5, tessellation: 24 },
+      this.scene
+    )
+    portalBack.material = portalMat
+    portalBack.rotation.y = Math.PI
+    portalBack.position.y = 0.7
+    portalBack.parent = this.node
+    this.meshes.push(portalBack)
+
+    // Inner glow ring
+    const glowMat = res.getStandardMaterial('veilGlow',
+      new Color3(0.2, 0.8, 1.0),
+      { emissive: new Color3(0.2, 0.8, 1.0) }
+    )
+    const innerRing = MeshBuilder.CreateTorus(
+      'riftInner_' + this.id,
+      { diameter: 1.0, thickness: 0.04, tessellation: 24 },
+      this.scene
+    )
+    innerRing.material = glowMat
+    innerRing.position.y = 0.7
+    innerRing.parent = this.node
+    this.meshes.push(innerRing)
+
+    // Base pedestal
+    const base = MeshBuilder.CreateCylinder(
+      'riftBase_' + this.id,
+      { height: 0.15, diameter: 0.8, tessellation: 12 },
+      this.scene
+    )
+    base.material = res.darkStoneMaterial
+    base.position.y = 0.075
+    base.parent = this.node
+    this.meshes.push(base)
+
+    // Floating crystals around the rift
+    const crystalPositions = [
+      { x: 0.5, y: 0.4, z: 0.3 },
+      { x: -0.5, y: 0.5, z: 0.2 },
+      { x: 0.3, y: 0.9, z: -0.4 },
+      { x: -0.4, y: 1.0, z: -0.3 }
+    ]
+
+    crystalPositions.forEach((pos, i) => {
+      const crystal = MeshBuilder.CreateCylinder(
+        `riftCrystal${i}_` + this.id,
+        { height: 0.15, diameterTop: 0, diameterBottom: 0.06, tessellation: 6 },
+        this.scene
+      )
+      crystal.material = glowMat
+      crystal.position.set(pos.x, pos.y, pos.z)
+      crystal.rotation.z = Math.random() * 0.5 - 0.25
+      crystal.rotation.x = Math.random() * 0.5 - 0.25
+      crystal.parent = this.node
+      this.meshes.push(crystal)
+    })
+  }
+
+  private createVeilCrystal() {
+    const res = SharedResources.get()
+
+    // Glowing cyan/purple material for the crystal
+    const crystalMat = res.getStandardMaterial(
+      'veilCrystal',
+      new Color3(0.4, 0.2, 0.9),
+      { emissive: new Color3(0.3, 0.6, 1.0) }
+    )
+
+    // Main crystal shard
+    const mainCrystal = MeshBuilder.CreateCylinder(
+      'veilCrystalMain_' + this.id,
+      { height: 0.5, diameterTop: 0, diameterBottom: 0.2, tessellation: 6 },
+      this.scene
+    )
+    mainCrystal.material = crystalMat
+    mainCrystal.position.y = 0.25
+    mainCrystal.rotation.z = 0.1
+    mainCrystal.parent = this.node
+    this.meshes.push(mainCrystal)
+
+    // Smaller crystal shards around it
+    const shardPositions = [
+      { x: 0.12, y: 0.15, z: 0.08, scale: 0.6, rz: -0.2 },
+      { x: -0.1, y: 0.1, z: 0.05, scale: 0.5, rz: 0.3 },
+      { x: 0.05, y: 0.12, z: -0.1, scale: 0.4, rz: -0.15 }
+    ]
+
+    shardPositions.forEach((pos, i) => {
+      const shard = MeshBuilder.CreateCylinder(
+        `veilCrystalShard${i}_` + this.id,
+        { height: 0.3 * pos.scale, diameterTop: 0, diameterBottom: 0.12 * pos.scale, tessellation: 6 },
+        this.scene
+      )
+      shard.material = crystalMat
+      shard.position.set(pos.x, pos.y, pos.z)
+      shard.rotation.z = pos.rz
+      shard.parent = this.node
+      this.meshes.push(shard)
+    })
+
+    // Base rock
+    const base = MeshBuilder.CreateSphere(
+      'veilCrystalBase_' + this.id,
+      { diameterX: 0.3, diameterY: 0.1, diameterZ: 0.25, segments: 4 },
+      this.scene
+    )
+    base.material = res.darkStoneMaterial
+    base.position.y = 0.05
+    base.parent = this.node
+    this.meshes.push(base)
+  }
+
+  private createVeilTouchedPlant() {
+    const res = SharedResources.get()
+
+    // Mutated purple/cyan plant material
+    const plantMat = res.getStandardMaterial(
+      'veilPlant',
+      new Color3(0.3, 0.15, 0.4),
+      { emissive: new Color3(0.1, 0.2, 0.3) }
+    )
+
+    // Ground disc with a purple tint
+    const ground = MeshBuilder.CreateDisc(
+      'veilPlantGround_' + this.id,
+      { radius: 0.25, tessellation: 8 },
+      this.scene
+    )
+    ground.material = plantMat
+    ground.rotation.x = Math.PI / 2
+    ground.position.y = 0.01
+    ground.parent = this.node
+    this.meshes.push(ground)
+
+    // Twisted stems with glowing tips
+    const glowMat = res.getStandardMaterial(
+      'veilPlantGlow',
+      new Color3(0.2, 0.6, 0.8),
+      { emissive: new Color3(0.2, 0.5, 0.7) }
+    )
+
+    const stems = [
+      { x: 0, z: 0, height: 0.25, twist: 0.2 },
+      { x: 0.1, z: 0.05, height: 0.2, twist: -0.15 },
+      { x: -0.08, z: 0.08, height: 0.18, twist: 0.25 },
+      { x: 0.05, z: -0.1, height: 0.22, twist: -0.1 }
+    ]
+
+    stems.forEach((s, i) => {
+      // Stem
+      const stem = MeshBuilder.CreateCylinder(
+        `veilPlantStem${i}_` + this.id,
+        { height: s.height, diameter: 0.03, tessellation: 4 },
+        this.scene
+      )
+      stem.material = plantMat
+      stem.position.set(s.x, s.height / 2, s.z)
+      stem.rotation.z = s.twist
+      stem.parent = this.node
+      this.meshes.push(stem)
+
+      // Glowing tip
+      const tip = MeshBuilder.CreateSphere(
+        `veilPlantTip${i}_` + this.id,
+        { diameter: 0.06, segments: 6 },
+        this.scene
+      )
+      tip.material = glowMat
+      tip.position.set(s.x + s.twist * 0.2, s.height + 0.02, s.z)
+      tip.parent = this.node
+      this.meshes.push(tip)
+    })
+  }
+
+  private createWardenMonument() {
+    const res = SharedResources.get()
+
+    // Base pedestal
+    const base = MeshBuilder.CreateBox(
+      'monumentBase_' + this.id,
+      { width: 0.6, height: 0.2, depth: 0.6 },
+      this.scene
+    )
+    base.material = res.stoneMaterial
+    base.position.y = 0.1
+    base.parent = this.node
+    this.meshes.push(base)
+
+    // Main body/torso of the statue
+    const body = MeshBuilder.CreateCylinder(
+      'monumentBody_' + this.id,
+      { height: 0.8, diameterTop: 0.3, diameterBottom: 0.4, tessellation: 8 },
+      this.scene
+    )
+    body.material = res.oldStoneMaterial
+    body.position.y = 0.6
+    body.parent = this.node
+    this.meshes.push(body)
+
+    // Head
+    const head = MeshBuilder.CreateSphere(
+      'monumentHead_' + this.id,
+      { diameter: 0.25, segments: 8 },
+      this.scene
+    )
+    head.material = res.oldStoneMaterial
+    head.position.y = 1.15
+    head.parent = this.node
+    this.meshes.push(head)
+
+    // Warden symbol - glowing ring
+    const glowMat = res.getStandardMaterial(
+      'wardenGlow',
+      new Color3(0.2, 0.6, 0.8),
+      { emissive: new Color3(0.1, 0.4, 0.6) }
+    )
+    const symbol = MeshBuilder.CreateTorus(
+      'monumentSymbol_' + this.id,
+      { diameter: 0.2, thickness: 0.02, tessellation: 16 },
+      this.scene
+    )
+    symbol.material = glowMat
+    symbol.rotation.x = Math.PI / 2
+    symbol.position.y = 0.7
+    symbol.position.z = 0.18
+    symbol.parent = this.node
+    this.meshes.push(symbol)
+
+    // Arms (simple blocks representing outstretched or holding stance)
+    const leftArm = MeshBuilder.CreateBox(
+      'monumentLeftArm_' + this.id,
+      { width: 0.3, height: 0.1, depth: 0.1 },
+      this.scene
+    )
+    leftArm.material = res.oldStoneMaterial
+    leftArm.position.set(-0.28, 0.75, 0)
+    leftArm.parent = this.node
+    this.meshes.push(leftArm)
+
+    const rightArm = MeshBuilder.CreateBox(
+      'monumentRightArm_' + this.id,
+      { width: 0.3, height: 0.1, depth: 0.1 },
+      this.scene
+    )
+    rightArm.material = res.oldStoneMaterial
+    rightArm.position.set(0.28, 0.75, 0)
+    rightArm.parent = this.node
+    this.meshes.push(rightArm)
+  }
+
+  private createTownSign() {
+    const res = SharedResources.get()
+
+    // Two support posts
+    const leftPost = MeshBuilder.CreateCylinder(
+      'townSignLeftPost_' + this.id,
+      { height: 1.2, diameter: 0.1, tessellation: 6 },
+      this.scene
+    )
+    leftPost.material = res.woodMaterial
+    leftPost.position.set(-0.35, 0.6, 0)
+    leftPost.parent = this.node
+    this.meshes.push(leftPost)
+
+    const rightPost = MeshBuilder.CreateCylinder(
+      'townSignRightPost_' + this.id,
+      { height: 1.2, diameter: 0.1, tessellation: 6 },
+      this.scene
+    )
+    rightPost.material = res.woodMaterial
+    rightPost.position.set(0.35, 0.6, 0)
+    rightPost.parent = this.node
+    this.meshes.push(rightPost)
+
+    // Crossbeam
+    const beam = MeshBuilder.CreateBox(
+      'townSignBeam_' + this.id,
+      { width: 0.8, height: 0.08, depth: 0.08 },
+      this.scene
+    )
+    beam.material = res.darkWoodMaterial
+    beam.position.y = 1.15
+    beam.parent = this.node
+    this.meshes.push(beam)
+
+    // Sign board
+    const board = MeshBuilder.CreateBox(
+      'townSignBoard_' + this.id,
+      { width: 0.7, height: 0.4, depth: 0.05 },
+      this.scene
+    )
+    board.material = res.woodMaterial
+    board.position.set(0, 0.9, 0.04)
+    board.parent = this.node
+    this.meshes.push(board)
+
+    // Decorative trim
+    const trim = MeshBuilder.CreateBox(
+      'townSignTrim_' + this.id,
+      { width: 0.75, height: 0.45, depth: 0.02 },
+      this.scene
+    )
+    trim.material = res.darkWoodMaterial
+    trim.position.set(0, 0.9, 0.06)
+    trim.parent = this.node
+    this.meshes.push(trim)
+  }
+
+  private createLorePlaque() {
+    const res = SharedResources.get()
+
+    // Stone slab
+    const slab = MeshBuilder.CreateBox(
+      'lorePlaqueSlab_' + this.id,
+      { width: 0.5, height: 0.6, depth: 0.08 },
+      this.scene
+    )
+    slab.material = res.stoneMaterial
+    slab.position.y = 0.4
+    slab.parent = this.node
+    this.meshes.push(slab)
+
+    // Decorative border
+    const border = MeshBuilder.CreateBox(
+      'lorePlaqueBorder_' + this.id,
+      { width: 0.55, height: 0.65, depth: 0.04 },
+      this.scene
+    )
+    border.material = res.darkStoneMaterial
+    border.position.set(0, 0.4, -0.03)
+    border.parent = this.node
+    this.meshes.push(border)
+
+    // Base support
+    const base = MeshBuilder.CreateCylinder(
+      'lorePlaqueBase_' + this.id,
+      { height: 0.1, diameter: 0.3, tessellation: 8 },
+      this.scene
+    )
+    base.material = res.stoneMaterial
+    base.position.y = 0.05
+    base.parent = this.node
+    this.meshes.push(base)
+
+    // Small golden emblem
+    const emblem = MeshBuilder.CreateTorus(
+      'lorePlaqueEmblem_' + this.id,
+      { diameter: 0.12, thickness: 0.015, tessellation: 12 },
+      this.scene
+    )
+    emblem.material = res.goldMaterial
+    emblem.rotation.x = Math.PI / 2
+    emblem.position.set(0, 0.6, 0.045)
+    emblem.parent = this.node
+    this.meshes.push(emblem)
+  }
+
+  private createNoticeBoard() {
+    const res = SharedResources.get()
+
+    // Main posts
+    const leftPost = MeshBuilder.CreateBox(
+      'noticeBoardLeftPost_' + this.id,
+      { width: 0.1, height: 1.0, depth: 0.1 },
+      this.scene
+    )
+    leftPost.material = res.darkWoodMaterial
+    leftPost.position.set(-0.4, 0.5, 0)
+    leftPost.parent = this.node
+    this.meshes.push(leftPost)
+
+    const rightPost = MeshBuilder.CreateBox(
+      'noticeBoardRightPost_' + this.id,
+      { width: 0.1, height: 1.0, depth: 0.1 },
+      this.scene
+    )
+    rightPost.material = res.darkWoodMaterial
+    rightPost.position.set(0.4, 0.5, 0)
+    rightPost.parent = this.node
+    this.meshes.push(rightPost)
+
+    // Board backing
+    const board = MeshBuilder.CreateBox(
+      'noticeBoardBoard_' + this.id,
+      { width: 0.75, height: 0.6, depth: 0.04 },
+      this.scene
+    )
+    board.material = res.woodMaterial
+    board.position.set(0, 0.65, 0.02)
+    board.parent = this.node
+    this.meshes.push(board)
+
+    // Frame
+    const frame = MeshBuilder.CreateBox(
+      'noticeBoardFrame_' + this.id,
+      { width: 0.8, height: 0.65, depth: 0.02 },
+      this.scene
+    )
+    frame.material = res.darkWoodMaterial
+    frame.position.set(0, 0.65, 0.04)
+    frame.parent = this.node
+    this.meshes.push(frame)
+
+    // Roof/cover
+    const roof = MeshBuilder.CreateBox(
+      'noticeBoardRoof_' + this.id,
+      { width: 0.9, height: 0.08, depth: 0.2 },
+      this.scene
+    )
+    roof.material = res.darkWoodMaterial
+    roof.position.set(0, 1.0, 0.05)
+    roof.rotation.x = 0.2
+    roof.parent = this.node
+    this.meshes.push(roof)
+
+    // Paper notices (visual flair)
+    const noticeMat = res.getStandardMaterial('noticePaper', new Color3(0.95, 0.9, 0.8))
+    const noticePositions = [
+      { x: -0.15, y: 0.7, rot: 0.05 },
+      { x: 0.1, y: 0.6, rot: -0.08 },
+      { x: -0.05, y: 0.55, rot: 0.02 }
+    ]
+
+    noticePositions.forEach((pos, i) => {
+      const notice = MeshBuilder.CreateBox(
+        `noticeBoardNotice${i}_` + this.id,
+        { width: 0.15, height: 0.2, depth: 0.01 },
+        this.scene
+      )
+      notice.material = noticeMat
+      notice.position.set(pos.x, pos.y, 0.06)
+      notice.rotation.z = pos.rot
+      notice.parent = this.node
+      this.meshes.push(notice)
+    })
   }
 
   private createDepletedObject() {
